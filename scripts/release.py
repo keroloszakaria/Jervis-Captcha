@@ -22,7 +22,9 @@ licenses.mkdir(exist_ok=True)
 for module in modules:
     if module.get("Main"):
         continue
-    directory = Path(module.get("Dir", ""))
+    if not module.get("Dir"):
+        raise RuntimeError(f"Missing downloaded source for {module['Path']}")
+    directory = Path(module["Dir"])
     if not directory.is_dir():
         raise RuntimeError(f"Missing module directory: {module['Path']}")
     candidates = [p for p in directory.iterdir() if p.is_file() and p.name.upper().startswith(("LICENSE", "COPYING", "COPYRIGHT"))]

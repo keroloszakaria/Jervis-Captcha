@@ -38,7 +38,7 @@ final class JervisCaptcha
         $body['siteKey'] = $this->siteKey;
         curl_setopt_array($handle, [
             CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 2000,
+            CURLOPT_PROXY => '', CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT_MS => 2000,
             CURLOPT_TIMEOUT_MS => 5000, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $this->secret],
