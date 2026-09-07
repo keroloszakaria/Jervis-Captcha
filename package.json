@@ -1,0 +1,26 @@
+{
+  "name": "jervis-captcha-workspace",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "vite build && node scripts/copy-assets.mjs",
+    "test:e2e": "playwright test",
+    "validate:web": "npm run typecheck && npm test && npm run build",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs"
+  },
+  "dependencies": { "lit": "3.3.3" },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.15.30",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "vitepress": "1.6.4",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,31 @@
+export const messages = {
+  en: {
+    title: 'Verify your request', subtitle: 'Private verification · runs locally', start: 'Start verification', verify: 'Verify', refresh: 'New challenge',
+    answer: 'Your answer', loading: 'Preparing your challenge…', verifying: 'Checking securely…', success: 'Verified', expired: 'Verification expired. Start a new session.',
+    idle: 'Waiting for a verification session.', ready: 'Complete the challenge below.', local: 'No external services', work: 'Preparing a local security check…',
+    text: 'Enter the characters shown in the image.', slider: 'Move the piece into the matching cutout.', drag: 'Move the piece horizontally and vertically into the cutout.',
+    rotate: 'Rotate the arrow until it points straight up.', click: 'Select 1, then 2, then 3. Keyboard: arrows move; Enter selects.',
+    audio: 'Play the audio and enter the five digits spoken in English.', pow: 'A bounded security check is running on this device.',
+    horizontal: 'Horizontal position', vertical: 'Vertical position', angle: 'Rotation angle', clear: 'Clear selection', required: 'Complete verification before submitting.',
+    incorrect_answer: 'That did not match. Try again; attempts are limited.', too_early: 'Please wait a moment before verifying.',
+    network_error: 'Cannot reach the local verification service.', rate_limited: 'Too many requests. Try again later.',
+    session_locked: 'Attempt limit reached. Request a new session.', challenge_expired: 'This challenge expired. Request a new one.',
+    work_timeout: 'The local check reached its device budget. Try again or use your application’s alternative verification route.',
+    error: 'Verification could not complete. Request a new session or contact your administrator.',
+  },
+  ar: {
+    title: 'تحقّق من الطلب', subtitle: 'تحقّق خاص يعمل محليًا', start: 'ابدأ التحقّق', verify: 'تحقّق', refresh: 'تحدٍّ جديد',
+    answer: 'الإجابة', loading: 'جارٍ تجهيز التحدّي…', verifying: 'جارٍ التحقّق…', success: 'تم التحقّق', expired: 'انتهت صلاحية التحقّق. ابدأ جلسة جديدة.',
+    idle: 'في انتظار جلسة التحقّق.', ready: 'أكمل التحدّي التالي.', local: 'بدون خدمات خارجية', work: 'جارٍ تجهيز فحص أمان محلي…',
+    text: 'اكتب الحروف والأرقام الظاهرة في الصورة.', slider: 'حرّك القطعة إلى المكان الناقص.', drag: 'حرّك القطعة أفقيًا ورأسيًا إلى المكان الناقص.',
+    rotate: 'دوّر السهم حتى يشير إلى أعلى.', click: 'اضغط 1 ثم 2 ثم 3. بالكيبورد: الأسهم للتحريك وEnter للاختيار.',
+    audio: 'شغّل الصوت واكتب الأرقام الخمسة المنطوقة بالإنجليزية.', pow: 'يجري فحص أمان محدود على هذا الجهاز.',
+    horizontal: 'الموضع الأفقي', vertical: 'الموضع الرأسي', angle: 'زاوية الدوران', clear: 'مسح الاختيارات', required: 'أكمل التحقّق قبل الإرسال.',
+    incorrect_answer: 'الإجابة غير مطابقة. حاول مجددًا؛ عدد المحاولات محدود.', too_early: 'انتظر قليلًا قبل التحقّق.',
+    network_error: 'تعذّر الوصول إلى خدمة التحقّق المحلية.', rate_limited: 'طلبات كثيرة. حاول لاحقًا.',
+    session_locked: 'وصلت إلى حد المحاولات. اطلب جلسة جديدة.', challenge_expired: 'انتهت صلاحية التحدّي. اطلب تحدّيًا جديدًا.',
+    work_timeout: 'وصل الفحص إلى الحد المسموح لموارد الجهاز. أعد المحاولة أو استخدم مسار التحقّق البديل في التطبيق.',
+    error: 'تعذّر إكمال التحقّق. اطلب جلسة جديدة أو تواصل مع المسؤول.',
+  },
+} as const;
+export type MessageKey = keyof typeof messages.en;

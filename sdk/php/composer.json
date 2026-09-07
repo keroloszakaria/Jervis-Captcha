@@ -1,0 +1,6 @@
+{
+  "name": "jervis/captcha-client", "description": "Server-side client for a local Jervis Captcha engine",
+  "type": "library", "license": "proprietary",
+  "require": { "php": ">=8.2", "ext-curl": "*", "ext-json": "*" },
+  "autoload": { "psr-4": { "Jervis\\Captcha\\": "./" } }
+}
