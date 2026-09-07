@@ -68,3 +68,4 @@ func main() {
 		json.NewEncoder(w).Encode(s.Expected)
 	})
 	log.Fatal(httpapi.HTTPServer("127.0.0.1:8099", mux).ListenAndServe())
+}

@@ -42,7 +42,7 @@ jobs:
           go mod tidy
           go mod download
           go mod verify
-      - name: Audit browser runtime dependencies
+      - name: Audit runtime and development dependencies
         run: bash scripts/audit-dependencies.sh
       - name: Typecheck browser and Node SDK
         run: npm run typecheck
@@ -58,7 +58,7 @@ jobs:
       - name: PHP and Python validation
         run: |
           php -l sdk/php/JervisCaptcha.php
-          python3 -m py_compile sdk/python/jervis_captcha.py
+          python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
       - name: Build .NET SDK
         run: dotnet build sdk/dotnet/Jervis.Captcha.csproj --configuration Release --nologo
       - name: Build local documentation
@@ -107,9 +107,42 @@ jobs:
             internal/captcha/audio_samples.go
             internal/web/dist/
             validation.json
+  native:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            ext: ''
+          - os: windows-latest
+            target: windows-amd64
+            ext: '.exe'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: offline-distributions
+          path: .artifacts
+      - name: Extract packaged executable
+        run: python -m zipfile -e .artifacts/jervis-captcha-${{ matrix.target }}.zip .native
+      - name: Native first-boot, persistence and replay acceptance
+        run: python scripts/smoke-native.py .native/jervis-captcha-${{ matrix.target }}/jervis-captcha${{ matrix.ext }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-validation-${{ matrix.target }}
+          path: native-validation.json
   persist-generated:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/')
-    needs: validate
+    needs: [validate, native]
     runs-on: ubuntu-latest
     permissions:
       contents: write
