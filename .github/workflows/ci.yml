@@ -42,6 +42,8 @@ jobs:
           go mod tidy
           go mod download
           go mod verify
+      - name: Audit browser runtime dependencies
+        run: bash scripts/audit-dependencies.sh
       - name: Typecheck browser and Node SDK
         run: npm run typecheck
       - name: Web unit tests
@@ -84,6 +86,7 @@ jobs:
           name: validation-evidence
           path: |
             validation.json
+            npm-audit.json
             go-test.jsonl
             web-test.json
             test-results/

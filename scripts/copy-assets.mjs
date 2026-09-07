@@ -2,8 +2,9 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 await cp('web/public', 'internal/web/dist', { recursive: true });
 await mkdir('dist', { recursive: true });
 await cp('internal/web/dist', 'dist/web', { recursive: true });
-// Preserve third-party notices without bundling development tools or fonts.
-const packages = ['lit', 'lit-element', 'lit-html', '@lit/reactive-element', '@lit-labs/ssr-dom-shim'];
+// These are the Lit packages bundled by the browser build. The Node-only
+// ssr-dom-shim is not part of the browser distribution.
+const packages = ['lit', 'lit-element', 'lit-html', '@lit/reactive-element'];
 let notice = 'Third-party code bundled into the Jervis Captcha browser widget.\n\n';
 for (const name of packages) {
   const json = JSON.parse(await readFile(`node_modules/${name}/package.json`, 'utf8'));
