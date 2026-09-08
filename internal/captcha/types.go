@@ -160,35 +160,45 @@ type Proof struct {
 	Token       string `json:"token"`
 	ExpiresInMS int64  `json:"expiresInMs"`
 }
-
-type APIError struct {
-	Code   string
-	Status int
+type VerifyRequest struct {
+	SiteKey string `json:"siteKey"`
+	Token   string `json:"token"`
+	Action  string `json:"action"`
+	Binding string `json:"binding"`
 }
-func (e *APIError) Error() string { return e.Code }
-func fail(code string, status int) error { return &APIError{Code: code, Status: status} }
+type Verified struct {
+	Success bool   `json:"success"`
+	Action  string `json:"action"`
+}
+type Error struct {
+	Code   string `json:"code"`
+	Status int    `json:"-"`
+}
+
+func (e *Error) Error() string           { return e.Code }
+func fail(code string, status int) error { return &Error{Code: code, Status: status} }
 
 type Engine struct {
 	Store Store
 	Sites map[string]Site
 	Now   func() time.Time
 }
+
 func New(store Store, sites []Site) (*Engine, error) {
-	if store == nil {
-		return nil, errors.New("store required")
+	e := &Engine{Store: store, Sites: map[string]Site{}, Now: time.Now}
+	if store == nil || len(sites) == 0 {
+		return nil, errors.New("store and sites are required")
 	}
-	m := make(map[string]Site, len(sites))
+	secrets := map[string]bool{}
 	for _, s := range sites {
-		if e := s.Validate(); e != nil {
-			return nil, e
+		if err := s.Validate(); err != nil {
+			return nil, err
 		}
-		if _, ok := m[s.Key]; ok {
-			return nil, errors.New("duplicate site key")
+		if _, ok := e.Sites[s.Key]; ok || secrets[s.Secret] {
+			return nil, errors.New("duplicate site key or secret")
 		}
-		m[s.Key] = s
+		e.Sites[s.Key] = s
+		secrets[s.Secret] = true
 	}
-	if len(m) == 0 {
-		return nil, errors.New("at least one site required")
-	}
-	return &Engine{Store: store, Sites: m, Now: time.Now}, nil
+	return e, nil
 }
