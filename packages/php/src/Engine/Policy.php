@@ -4,7 +4,7 @@ namespace Jervis\Captcha\Engine;
 use InvalidArgumentException;
 final readonly class Policy
 {
-    public const KINDS = ['text', 'slider', 'drag', 'rotate', 'click', 'math', 'logic', 'pow'];
+    public const KINDS = ['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow'];
     public function __construct(public array $types, public bool $isAntiAI, public int $workBits, public int $minSolveMs, public int $sessionTtlSeconds, public int $challengeTtlSeconds, public int $proofTtlSeconds, public int $maxAttempts, public int $maxRefreshes, public int $sessionsPerMinute) { $this->validate(); }
     public static function fromArray(array $value): self
     {
