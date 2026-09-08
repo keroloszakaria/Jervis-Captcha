@@ -10,19 +10,20 @@ Laravel/PHP can run the verification engine in-process through `jervis/captcha`;
 
 | Area | Implementation |
 |---|---|
-| Challenges | Raster text, puzzle slider, free-drag puzzle, arrow rotation, ordered click, English digit audio in native mode, math, arithmetic sequences, bounded proof of work |
+| Challenges | Raster text, puzzle slider, free-drag puzzle, arrow rotation, ordered click, locally generated English digit audio, math, arithmetic sequences, bounded proof of work |
 | Presentation | Inline, checkbox entry, invisible for PoW; human challenges remain visible |
+| Accessibility | Server-owned accessible challenge pool; managed Laravel flow can offer a local audio alternative without letting the browser choose a concrete challenge type |
 | Trust model | Host-created/managed sessions, action/session binding, server-owned policies, short-lived opaque proofs, atomic single-use consumption |
 | Persistence | Laravel lock-capable persistent cache in embedded mode; SQLite WAL and compare-and-swap in native mode |
 | Browser UX | Arabic/English UI, RTL, light/dark/system themes, keyboard controls, form association, cancellation, recovery and expiry events |
 | Integrations | `jervis/captcha` Composer package, `@jervis/captcha` browser package, plus generic HTTP/OpenAPI and Node/PHP/Python/.NET native-engine clients |
 | Deployment | In-process Laravel/PHP package or native executable; both can run without Internet access at runtime |
 
-Embedded PHP currently implements text, slider, drag, rotate, ordered click, math, logic and PoW. Audio remains available through the optional native engine until a local PHP audio implementation is added. Math and logic are explicitly low-assurance types and cannot be enabled in an `isAntiAI` policy. PoW raises computational cost; it is not proof of a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
+The embedded PHP engine now implements text, slider, drag, rotate, ordered click, English digit audio, math, logic and PoW. Audio uses the same generated local digit samples as the native engine; no runtime TTS or speech API is used. Math and logic are explicitly low-assurance types and cannot be enabled in an `isAntiAI` policy. PoW raises computational cost; it is not proof of a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
 
 ## Embedded Laravel package
 
-Laravel can run Jervis Captcha entirely inside the application process: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; `@jervis/captcha` contains the framework-neutral browser widget for SPA projects.
+Laravel 11, 12 and 13 can run Jervis Captcha entirely inside the application process on PHP 8.2+: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; `@jervis/captcha` contains the framework-neutral browser widget for SPA projects.
 
 ```bash
 composer require jervis/captcha
@@ -48,6 +49,8 @@ import '@jervis/captcha';
 ```
 
 That is the default integration surface. The package creates the verification session, generates the challenge, validates the answer and consumes the one-use proof. Set `endpoint` only when the Laravel application/package routes use a non-default base path.
+
+The managed browser flow supports only the abstract variants `standard` and `accessible`. The browser cannot force `audio`, `pow`, `math`, `isAntiAI`, binding material or any other policy field. When the server-owned policy exposes an accessible pool, the widget can offer **Use an accessible challenge / استخدم تحديًا ميسّرًا** and request a fresh accessible session. The default embedded policy maps that variant to local English digit audio.
 
 See [Embedded PHP / Laravel](docs/php-embedded.md). The Go/native engine remains available for non-PHP and centralized deployments.
 
@@ -84,7 +87,7 @@ go vet ./...
 go build -trimpath -o jervis-captcha ./cmd/jervis-captcha
 ```
 
-For embedded packages, `npm run build` produces the browser package artifact used by both Composer and npm distributions, and `python3 scripts/package-embedded.py` creates offline Composer/npm-compatible archives after validation.
+For embedded packages, `npm run build` produces the browser package artifact used by both Composer and npm distributions, and `python3 scripts/package-embedded.py` creates offline Composer/npm-compatible archives after validation. The package build also copies the generated native digit-audio payload byte-for-byte into the Composer artifact so both runtimes use the same local source samples.
 
 A connected **build host** resolves dependencies. Released runtime artifacts need no runtime dependency installer or Internet connection. For an offline source rebuild, additionally transfer the exact toolchains/caches or an internal dependency repository; a git checkout alone is not an offline build kit.
 
