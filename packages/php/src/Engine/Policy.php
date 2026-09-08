@@ -32,29 +32,70 @@ final readonly class Policy
 
     public static function fromArray(array $value): self
     {
+        self::assertKnownKeys($value);
         return new self(
-            array_values($value['types'] ?? ['text', 'slider', 'rotate']),
-            array_values($value['accessibilityTypes'] ?? ['audio']),
-            (bool) ($value['isAntiAI'] ?? true),
-            (int) ($value['workBits'] ?? 14),
-            (int) ($value['minSolveMs'] ?? 400),
-            (int) ($value['sessionTtlSeconds'] ?? 300),
-            (int) ($value['challengeTtlSeconds'] ?? 120),
-            (int) ($value['proofTtlSeconds'] ?? 60),
-            (int) ($value['maxAttempts'] ?? 3),
-            (int) ($value['maxRefreshes'] ?? 4),
-            (int) ($value['sessionsPerMinute'] ?? 120),
+            self::types($value, 'types', ['text', 'slider', 'rotate']),
+            self::types($value, 'accessibilityTypes', ['audio']),
+            self::boolean($value, 'isAntiAI', true),
+            self::integer($value, 'workBits', 14),
+            self::integer($value, 'minSolveMs', 400),
+            self::integer($value, 'sessionTtlSeconds', 300),
+            self::integer($value, 'challengeTtlSeconds', 120),
+            self::integer($value, 'proofTtlSeconds', 60),
+            self::integer($value, 'maxAttempts', 3),
+            self::integer($value, 'maxRefreshes', 4),
+            self::integer($value, 'sessionsPerMinute', 120),
         );
     }
 
     public static function completeArray(array $value): bool
     {
+        try { self::assertKnownKeys($value); } catch (InvalidArgumentException) { return false; }
         foreach (self::KEYS as $key) if (!array_key_exists($key, $value)) return false;
         return true;
     }
 
     public function toArray(): array { return get_object_vars($this); }
     public function accessibilityAvailable(): bool { return $this->accessibilityTypes !== []; }
+
+    /** @param array<string,mixed> $value */
+    private static function assertKnownKeys(array $value): void
+    {
+        foreach (array_keys($value) as $key) {
+            if (!is_string($key) || !in_array($key, self::KEYS, true)) {
+                throw new InvalidArgumentException('Unknown CAPTCHA policy field');
+            }
+        }
+    }
+
+    /** @param array<string,mixed> $value @param list<string> $default @return list<string> */
+    private static function types(array $value, string $key, array $default): array
+    {
+        if (!array_key_exists($key, $value)) return $default;
+        if (!is_array($value[$key])) throw new InvalidArgumentException("{$key} must be an array");
+        return array_values($value[$key]);
+    }
+
+    /** @param array<string,mixed> $value */
+    private static function boolean(array $value, string $key, bool $default): bool
+    {
+        if (!array_key_exists($key, $value)) return $default;
+        $raw = $value[$key];
+        if (is_bool($raw)) return $raw;
+        if ($raw === 1 || $raw === '1' || $raw === 'true') return true;
+        if ($raw === 0 || $raw === '0' || $raw === 'false') return false;
+        throw new InvalidArgumentException("{$key} must be a boolean");
+    }
+
+    /** @param array<string,mixed> $value */
+    private static function integer(array $value, string $key, int $default): int
+    {
+        if (!array_key_exists($key, $value)) return $default;
+        $raw = $value[$key];
+        if (is_int($raw)) return $raw;
+        if (is_string($raw) && preg_match('/^-?(?:0|[1-9][0-9]*)$/D', $raw) === 1) return (int) $raw;
+        throw new InvalidArgumentException("{$key} must be an integer");
+    }
 
     private function validate(): void
     {
