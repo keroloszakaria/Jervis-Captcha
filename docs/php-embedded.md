@@ -64,13 +64,27 @@ The browser may provide an action name such as `signup`; it cannot provide a pol
 
 `default_policy` is server-owned and applies to any syntactically valid action. This lets an application use `signup`, `login`, or `forgot-password` without duplicating policy configuration. `actions` can override the default for selected actions.
 
-The engine applies global, per-action, global-per-binding and per-action-per-binding issuance limits so inventing many action names does not bypass the issuance budget.
+The engine applies global, per-action, global-per-binding and per-action-per-binding **session issuance** limits so inventing many action names does not bypass the issuance budget. Challenge refreshes and answer attempts are additionally bounded inside each verification session.
+
+### Endpoint request budgets
+
+The embedded Laravel routes also enforce action-independent request budgets before `issue()` and `solve()` execute. This prevents a caller from bypassing endpoint throttling by continuously creating different valid action names or sending large volumes of random but syntactically valid session tokens.
+
+Defaults:
+
+- `JERVIS_CAPTCHA_GLOBAL_REQUESTS_PER_MINUTE=5000`
+- `JERVIS_CAPTCHA_CHALLENGES_PER_BINDING_PER_MINUTE=30`
+- `JERVIS_CAPTCHA_ANSWERS_PER_BINDING_PER_MINUTE=60`
+
+The per-binding key is derived from the trusted Laravel session binding, not a browser-provided identifier. A value outside `1..100000` is treated as invalid configuration and verification fails closed with `verification_unavailable`; `jervis-captcha:doctor` also reports the configuration as invalid.
+
+These limits supplement normal application/WAF/rate-limiter controls; they do not replace them. Tune them for the expected concurrency of the protected flow rather than disabling them.
 
 ## State and atomicity
 
 The default Laravel adapter uses the application's Cache Manager plus Laravel atomic locks. A proof is consumed under the same session-state lock, so two concurrent requests cannot both consume it. On multi-node deployments, all nodes must use the same shared lock-capable cache backend. Do not use independent local cache stores across nodes.
 
-`php artisan jervis-captcha:doctor` checks PHP/GD, secure randomness, engine configuration, browser assets and a real persistent cache lock before deployment. The Laravel `array` and `null` cache stores are rejected because CAPTCHA state has to survive across requests.
+`php artisan jervis-captcha:doctor` checks PHP/GD, secure randomness, engine configuration, request budgets, browser assets and a real persistent cache lock before deployment. The Laravel `array` and `null` cache stores are rejected because CAPTCHA state has to survive across requests.
 
 ## Air-gapped package delivery
 
