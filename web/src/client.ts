@@ -15,16 +15,51 @@ export class CaptchaError extends Error {
 }
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fieldPattern = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
-const kinds = new Set(['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow']);
+const imagePattern = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+const audioPattern = /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/;
+const kinds = new Set<ChallengeType>(['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow']);
+function validInteger(value: unknown, min: number, max: number): value is number {
+  return Number.isInteger(value) && Number(value) >= min && Number(value) <= max;
+}
+function validWork(work: Work | undefined): boolean {
+  return work === undefined || (tokenPattern.test(work.seed) && Number.isInteger(work.bits) && work.bits >= 1 && work.bits <= 20);
+}
+function validGeometry(c: Challenge, pieceRequired: boolean): boolean {
+  if (!validInteger(c.width, 80, 1000) || !validInteger(c.height, 60, 1000)) return false;
+  if (!pieceRequired) return true;
+  if (!validInteger(c.pieceSize, 8, Math.min(c.width!, c.height!))) return false;
+  return validInteger(c.pieceTop, 0, c.height! - c.pieceSize!);
+}
 function validChallenge(c: Challenge): boolean {
-  return !!c && typeof c.id === 'string' && tokenPattern.test(c.id) && kinds.has(c.type)
-    && typeof c.prompt === 'string' && c.prompt.length > 0 && c.prompt.length <= 500
-    && Number.isFinite(c.expiresInMs) && c.expiresInMs > 0 && c.expiresInMs <= 900_000
-    && Number.isFinite(c.minimumDelayMs) && c.minimumDelayMs >= 0 && c.minimumDelayMs <= 10_000
-    && (!c.work || (tokenPattern.test(c.work.seed) && Number.isInteger(c.work.bits) && c.work.bits >= 1 && c.work.bits <= 20))
-    && (!c.image || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.image))
-    && (!c.piece || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.piece))
-    && (!c.audio || /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(c.audio));
+  if (!c || typeof c.id !== 'string' || !tokenPattern.test(c.id) || !kinds.has(c.type)
+    || typeof c.prompt !== 'string' || c.prompt.length === 0 || c.prompt.length > 500
+    || !Number.isFinite(c.expiresInMs) || c.expiresInMs <= 0 || c.expiresInMs > 900_000
+    || !Number.isFinite(c.minimumDelayMs) || c.minimumDelayMs < 0 || c.minimumDelayMs > 10_000
+    || !validWork(c.work)
+    || (c.image !== undefined && !imagePattern.test(c.image))
+    || (c.piece !== undefined && !imagePattern.test(c.piece))
+    || (c.audio !== undefined && !audioPattern.test(c.audio))) return false;
+
+  switch (c.type) {
+    case 'text':
+    case 'rotate':
+      return typeof c.image === 'string' && imagePattern.test(c.image) && c.piece === undefined && c.audio === undefined;
+    case 'slider':
+    case 'drag':
+      return typeof c.image === 'string' && imagePattern.test(c.image)
+        && typeof c.piece === 'string' && imagePattern.test(c.piece)
+        && c.audio === undefined && validGeometry(c, true);
+    case 'click':
+      return typeof c.image === 'string' && imagePattern.test(c.image)
+        && c.piece === undefined && c.audio === undefined && validGeometry(c, false);
+    case 'audio':
+      return typeof c.audio === 'string' && audioPattern.test(c.audio) && c.image === undefined && c.piece === undefined;
+    case 'math':
+    case 'logic':
+      return c.image === undefined && c.piece === undefined && c.audio === undefined;
+    case 'pow':
+      return c.image === undefined && c.piece === undefined && c.audio === undefined && c.work !== undefined;
+  }
 }
 function csrfHeader(target: URL, explicitToken: string): Record<string, string> {
   if (typeof location === 'undefined' || target.origin !== location.origin) return {};
