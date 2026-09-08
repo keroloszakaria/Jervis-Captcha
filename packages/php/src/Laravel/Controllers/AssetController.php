@@ -8,9 +8,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 final class AssetController extends Controller
 {
-    public function __invoke(): BinaryFileResponse
+    public function __invoke(string $file = 'jervis-captcha.js'): BinaryFileResponse
     {
-        $path = dirname(__DIR__, 3) . '/resources/dist/jervis-captcha.js';
+        abort_unless(in_array($file, ['jervis-captcha.js', 'jervis-captcha-base.js'], true), 404);
+        $path = dirname(__DIR__, 3) . '/resources/dist/' . $file;
         abort_unless(is_file($path), 503, 'Jervis Captcha browser asset is not installed');
 
         // Alpha package URLs include a version query, but builds within the same
