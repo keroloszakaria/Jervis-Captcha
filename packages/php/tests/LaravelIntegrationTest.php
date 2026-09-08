@@ -69,9 +69,19 @@ final class LaravelIntegrationTest extends TestCase
         self::assertStringContainsString('locale="ar"', $html);
         self::assertStringContainsString('csrf-token=', $html);
         self::assertStringContainsString('endpoint="/jervis-captcha/"', $html);
+        self::assertStringContainsString('/jervis-captcha/assets/jervis-captcha.js', $html);
         self::assertStringNotContainsString('session-token=', $html);
         self::assertStringNotContainsString('http://', $html);
         self::assertStringNotContainsString('https://', $html);
+    }
+
+    public function testPackageServesOnlyItsBrowserRuntimeModules(): void
+    {
+        $entry = $this->get('/jervis-captcha/assets/jervis-captcha.js')->assertOk();
+        self::assertStringContainsString("from './jervis-captcha-base.js'", $entry->getContent());
+        $this->get('/jervis-captcha/assets/jervis-captcha-base.js')->assertOk();
+        $this->get('/jervis-captcha/assets/THIRD_PARTY_NOTICES.txt')->assertNotFound();
+        $this->get('/jervis-captcha/assets/../config/jervis-captcha.php')->assertNotFound();
     }
 
     private function solveWork(string $seed, int $bits): string
