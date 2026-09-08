@@ -45,8 +45,16 @@ final class CaptchaController extends Controller
         $request->validate([
             'sessionToken' => ['required', 'string', 'size:43'],
             'challengeId' => ['required', 'string', 'size:43'],
-            'answer' => ['required', 'array'],
-            'workNonce' => ['nullable', 'string', 'max:64'],
+            'answer' => ['required', 'array:text,x,y,angle,points', 'max:5'],
+            'answer.text' => ['nullable', 'string', 'max:128'],
+            'answer.x' => ['nullable', 'numeric', 'between:-10000,10000'],
+            'answer.y' => ['nullable', 'numeric', 'between:-10000,10000'],
+            'answer.angle' => ['nullable', 'numeric', 'between:-10000,10000'],
+            'answer.points' => ['nullable', 'array', 'max:3'],
+            'answer.points.*' => ['array:x,y'],
+            'answer.points.*.x' => ['required', 'numeric', 'between:-10000,10000'],
+            'answer.points.*.y' => ['required', 'numeric', 'between:-10000,10000'],
+            'workNonce' => ['nullable', 'string', 'regex:/^\d{1,8}$/D'],
         ]);
         return $this->run(function () use ($request, $engine, $binding, $limiter): array {
             $resolvedBinding = $binding->resolve($request);
