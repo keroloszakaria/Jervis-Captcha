@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0-alpha.1"
+const Version = "0.2.0-alpha.1"
 
 var Kinds = []string{"text", "slider", "drag", "rotate", "click", "audio", "math", "logic", "pow"}
 var ErrNotFound = errors.New("not found")
@@ -160,45 +160,35 @@ type Proof struct {
 	Token       string `json:"token"`
 	ExpiresInMS int64  `json:"expiresInMs"`
 }
-type VerifyRequest struct {
-	SiteKey string `json:"siteKey"`
-	Token   string `json:"token"`
-	Action  string `json:"action"`
-	Binding string `json:"binding"`
-}
-type Verified struct {
-	Success bool   `json:"success"`
-	Action  string `json:"action"`
-}
-type Error struct {
-	Code   string `json:"code"`
-	Status int    `json:"-"`
-}
 
-func (e *Error) Error() string           { return e.Code }
-func fail(code string, status int) error { return &Error{Code: code, Status: status} }
+type APIError struct {
+	Code   string
+	Status int
+}
+func (e *APIError) Error() string { return e.Code }
+func fail(code string, status int) error { return &APIError{Code: code, Status: status} }
 
 type Engine struct {
 	Store Store
 	Sites map[string]Site
 	Now   func() time.Time
 }
-
 func New(store Store, sites []Site) (*Engine, error) {
-	e := &Engine{Store: store, Sites: map[string]Site{}, Now: time.Now}
-	if store == nil || len(sites) == 0 {
-		return nil, errors.New("store and sites are required")
+	if store == nil {
+		return nil, errors.New("store required")
 	}
-	secrets := map[string]bool{}
+	m := make(map[string]Site, len(sites))
 	for _, s := range sites {
-		if err := s.Validate(); err != nil {
-			return nil, err
+		if e := s.Validate(); e != nil {
+			return nil, e
 		}
-		if _, ok := e.Sites[s.Key]; ok || secrets[s.Secret] {
-			return nil, errors.New("duplicate site key or secret")
+		if _, ok := m[s.Key]; ok {
+			return nil, errors.New("duplicate site key")
 		}
-		e.Sites[s.Key] = s
-		secrets[s.Secret] = true
+		m[s.Key] = s
 	}
-	return e, nil
+	if len(m) == 0 {
+		return nil, errors.New("at least one site required")
+	}
+	return &Engine{Store: store, Sites: m, Now: time.Now}, nil
 }
