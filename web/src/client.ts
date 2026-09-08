@@ -1,4 +1,5 @@
 export type ChallengeType = 'text' | 'slider' | 'drag' | 'rotate' | 'click' | 'audio' | 'math' | 'logic' | 'pow';
+export type SessionVariant = 'standard' | 'accessible';
 export interface Point { x: number; y: number }
 export interface Answer { text?: string; x?: number; y?: number; angle?: number; points?: Point[] }
 export interface Work { seed: string; bits: number }
@@ -8,7 +9,7 @@ export interface Challenge {
   expiresInMs: number; minimumDelayMs: number; work?: Work;
 }
 export interface Proof { token: string; expiresInMs: number }
-export interface CaptchaSession { sessionToken: string; expiresInMs: number }
+export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean }
 export class CaptchaError extends Error {
   constructor(public readonly code: string, public readonly status = 0) { super(code); this.name = 'CaptchaError'; }
 }
@@ -62,13 +63,13 @@ export class CaptchaClient {
       throw new CaptchaError(controller.signal.aborted ? 'request_cancelled' : 'network_error');
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   }
-  async createSession(action: string, signal?: AbortSignal): Promise<CaptchaSession> {
-    if (!/^[A-Za-z0-9._-]{1,64}$/.test(action)) throw new CaptchaError('invalid_context');
-    // Managed session creation belongs to the host application. Native/universal
-    // deployments must create sessions server-side and pass sessionToken instead.
+  async createSession(action: string, variant: SessionVariant = 'standard', signal?: AbortSignal): Promise<CaptchaSession> {
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(action) || !['standard', 'accessible'].includes(variant)) throw new CaptchaError('invalid_context');
     if (typeof location !== 'undefined' && this.base.origin !== location.origin) throw new CaptchaError('managed_session_requires_same_origin');
-    const session = await this.post<CaptchaSession>(`session/${encodeURIComponent(action)}`, {}, signal);
-    if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken) || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900_000) throw new CaptchaError('invalid_response');
+    const session = await this.post<CaptchaSession>(`session/${encodeURIComponent(action)}`, { variant }, signal);
+    if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken)
+      || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900_000
+      || typeof session.accessibilityAvailable !== 'boolean') throw new CaptchaError('invalid_response');
     return session;
   }
   async issue(sessionToken: string, signal?: AbortSignal): Promise<Challenge> {
