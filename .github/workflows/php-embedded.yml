@@ -115,6 +115,16 @@ jobs:
             app: '^13.0'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,7 +149,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: gd,zlib
+          extensions: gd,zlib,redis
           tools: composer:v2
           coverage: none
       - name: Validate manifests and PHP syntax
@@ -176,6 +186,9 @@ jobs:
           SESSION_DRIVER=file
           JERVIS_CAPTCHA_STORE=file
           JERVIS_CAPTCHA_SECRET=consumer-fixture-secret-0123456789abcdef
+          REDIS_CLIENT=phpredis
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
           EOF
           php artisan config:clear
           php artisan jervis-captcha:install --skip-doctor
@@ -183,6 +196,29 @@ jobs:
           php artisan route:list --path=jervis-captcha
           cp "$GITHUB_WORKSPACE/tests/consumers/laravel/JervisCaptchaConsumerTest.php" tests/Feature/JervisCaptchaConsumerTest.php
           php artisan test tests/Feature/JervisCaptchaConsumerTest.php
+
+          race_store() {
+            local store="$1"
+            local proof out_a out_b err_a err_b pid_a pid_b status_a status_b statuses outputs
+            proof="$(JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" prepare)"
+            [[ "$proof" =~ ^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$ ]]
+            out_a="$RUNNER_TEMP/race-${store}-a.out"; err_a="$RUNNER_TEMP/race-${store}-a.err"
+            out_b="$RUNNER_TEMP/race-${store}-b.out"; err_b="$RUNNER_TEMP/race-${store}-b.err"
+            set +e
+            JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" consume "$proof" >"$out_a" 2>"$err_a" & pid_a=$!
+            JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" consume "$proof" >"$out_b" 2>"$err_b" & pid_b=$!
+            wait "$pid_a"; status_a=$?
+            wait "$pid_b"; status_b=$?
+            set -e
+            cat "$err_a" "$err_b" >&2 || true
+            statuses="$(printf '%s\n%s\n' "$status_a" "$status_b" | sort -n | tr '\n' ' ')"
+            outputs="$(cat "$out_a" "$out_b" | sort | tr '\n' ' ')"
+            test "$statuses" = '0 2 '
+            test "$outputs" = 'consumedrejected '
+          }
+
+          race_store file
+          race_store redis
       - name: Record resolved framework versions
         if: always()
         run: |
