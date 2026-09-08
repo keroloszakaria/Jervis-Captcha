@@ -20,6 +20,8 @@ final class AssetController extends Controller
         return response()->file($path, [
             'Content-Type' => 'text/javascript; charset=utf-8',
             'Cache-Control' => 'public, max-age=3600, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
         ]);
     }
 }
