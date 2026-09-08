@@ -1,0 +1,191 @@
+name: Validate and package
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: captcha-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pin dependency resolver
+        run: npm install --global npm@11.19.1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Bootstrap generated audio only when absent
+        shell: bash
+        run: |
+          if [ ! -f internal/captcha/audio_samples.go ]; then
+            if ! command -v espeak >/dev/null; then sudo apt-get update && sudo apt-get install -y espeak; fi
+            python3 scripts/audio-pack.py
+          fi
+      - name: Install and resolve locked dependencies
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          go mod tidy
+          go mod download
+          go mod verify
+      - name: Audit runtime and development dependencies
+        run: bash scripts/audit-dependencies.sh
+      - name: Typecheck browser and Node SDK
+        run: npm run typecheck
+      - name: Web unit tests
+        run: npm test -- --reporter=json --outputFile=web-test.json
+      - name: Build embedded offline widget
+        run: npm run build
+      - name: Go tests with race detector and real SQLite
+        shell: bash
+        run: go test -race -count=1 -json ./... | tee go-test.jsonl
+      - name: Go static analysis
+        run: go vet ./...
+      - name: PHP and Python validation
+        run: |
+          php -l sdk/php/JervisCaptcha.php
+          python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
+      - name: Build .NET SDK
+        run: dotnet build sdk/dotnet/Jervis.Captcha.csproj --configuration Release --nologo
+      - name: Exercise all four backend SDKs against the production engine
+        shell: bash
+        run: |
+          mkdir -p .sdk-build
+          npx tsc sdk/node/client.ts --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --declaration --outDir .sdk-build
+          go build -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
+          dotnet build tests/consumers/dotnet/Consumer.csproj --configuration Release --nologo
+          python3 scripts/test-sdk-integration.py .sdk-build/jervis-captcha
+      - name: Build local documentation
+        run: npm run docs:build
+      - name: Install browser test runtimes
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Real-browser integration and offline checks
+        run: npm run test:e2e
+      - name: Compile native air-gapped distributions
+        shell: bash
+        run: |
+          mkdir -p dist/releases
+          for target in linux-amd64 windows-amd64 darwin-arm64; do
+            os="${target%-*}"; arch="${target#*-}"; ext=""; [ "$os" != windows ] || ext=".exe"
+            mkdir -p "dist/releases/jervis-captcha-$target"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w -buildid=' -o "dist/releases/jervis-captcha-$target/jervis-captcha$ext" ./cmd/jervis-captcha
+          done
+          python3 scripts/release.py
+      - name: Record validation evidence
+        if: always()
+        run: python3 scripts/report.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-evidence
+          path: |
+            validation.json
+            npm-audit.json
+            sdk-validation.json
+            go-test.jsonl
+            web-test.json
+            test-results/
+            playwright-report/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-distributions
+          path: |
+            dist/releases/*.zip
+            dist/releases/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-generated-files
+          path: |
+            go.mod
+            go.sum
+            package-lock.json
+            internal/captcha/audio_samples.go
+            internal/web/dist/
+            validation.json
+  native:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            ext: ''
+          - os: windows-latest
+            target: windows-amd64
+            ext: '.exe'
+          - os: macos-15
+            target: darwin-arm64
+            ext: ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: offline-distributions
+          path: .artifacts
+      - name: Extract packaged executable
+        run: python -m zipfile -e .artifacts/jervis-captcha-${{ matrix.target }}.zip .native
+      - name: Native first-boot, persistence and replay acceptance
+        run: python scripts/smoke-native.py .native/jervis-captcha-${{ matrix.target }}/jervis-captcha${{ matrix.ext }}
+      - name: Linux acceptance with external networking removed
+        if: matrix.target == 'linux-amd64'
+        shell: bash
+        run: bash scripts/test-airgap.sh .native/jervis-captcha-${{ matrix.target }}/jervis-captcha
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-validation-${{ matrix.target }}
+          path: |
+            native-validation.json
+            airgap-validation.json
+  persist-generated:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/')
+    needs: [validate, native]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Confirm branch has not advanced
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-generated-files
+          path: .
+      - name: Commit only verified generated assets to the implementation branch
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add go.mod go.sum package-lock.json internal/captcha/audio_samples.go internal/web/dist validation.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: lock dependencies and embed verified offline assets'
+            git push origin "HEAD:$BRANCH_NAME"
+          fi
