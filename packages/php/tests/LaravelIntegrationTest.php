@@ -61,6 +61,31 @@ final class LaravelIntegrationTest extends TestCase
         $this->postJson('/protected', ['jervisCaptchaToken' => $proof['token']])->assertStatus(422);
     }
 
+    public function testConfiguredProofFieldIsSharedByBladeAndMiddleware(): void
+    {
+        $this->app['config']->set('jervis-captcha.field_name', 'captchaProof');
+        $html = Blade::render('<x-jervis-captcha action="signup" />');
+        self::assertStringContainsString('name="captchaProof"', $html);
+        self::assertStringNotContainsString('name="jervisCaptchaToken"', $html);
+
+        $session = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json();
+        $challenge = $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $session['sessionToken']])->assertOk()->json();
+        $proof = $this->postJson('/jervis-captcha/v1/answers', [
+            'sessionToken' => $session['sessionToken'],
+            'challengeId' => $challenge['id'],
+            'answer' => [],
+            'workNonce' => $this->solveWork($challenge['work']['seed'], $challenge['work']['bits']),
+        ])->assertOk()->json('token');
+
+        $this->postJson('/protected', ['jervisCaptchaToken' => $proof])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.captchaProof.0', 'CAPTCHA verification failed.');
+
+        $this->postJson('/protected', ['captchaProof' => $proof])
+            ->assertOk()
+            ->assertJson(['accepted' => true]);
+    }
+
     public function testAccessibleVariantUsesServerOwnedAudioPoolAndProducesAUsableProof(): void
     {
         $session = $this->postJson('/jervis-captcha/session/signup', ['variant' => 'accessible'])->assertOk()->json();
@@ -157,6 +182,7 @@ final class LaravelIntegrationTest extends TestCase
         self::assertStringContainsString('locale="ar"', $html);
         self::assertStringContainsString('csrf-token=', $html);
         self::assertStringContainsString('endpoint="/jervis-captcha/"', $html);
+        self::assertStringContainsString('name="jervisCaptchaToken"', $html);
         self::assertStringContainsString('/jervis-captcha/assets/jervis-captcha.js', $html);
         self::assertStringNotContainsString('session-token=', $html);
         self::assertStringNotContainsString('http://', $html);
@@ -170,10 +196,6 @@ final class LaravelIntegrationTest extends TestCase
         self::assertGreaterThan(1000, strlen($entry));
         self::assertStringContainsString('jervis-captcha', $entry);
 
-        // The checked-in fallback uses a validated base bundle. A canonical
-        // Vite build may inline everything into the entry. Test whichever
-        // layout is actually packaged instead of coupling release acceptance
-        // to that build detail.
         if (str_contains($entry, './jervis-captcha-base.js')) {
             $this->get('/jervis-captcha/assets/jervis-captcha-base.js')->assertOk();
         }
