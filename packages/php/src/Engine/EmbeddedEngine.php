@@ -46,14 +46,20 @@ final class EmbeddedEngine
         }
     }
 
-    public function createSession(string $action, string $binding, ?string $type = null): array
+    public function createSession(string $action, string $binding, string $variant = 'standard'): array
     {
         $policy = $this->policy($action);
         $this->validateBinding($binding);
-        $kind = $type ?? $policy->types[array_rand($policy->types)];
-        if (!in_array($kind, $policy->types, true)) {
-            throw new CaptchaException('type_not_allowed', 400);
+        if (!in_array($variant, ['standard', 'accessible'], true)) {
+            throw new CaptchaException('invalid_context', 400);
         }
+
+        $pool = $variant === 'accessible' ? $policy->accessibilityTypes : $policy->types;
+        if ($pool === []) {
+            throw new CaptchaException('accessibility_unavailable', 400);
+        }
+        $kind = $pool[array_rand($pool)];
+
         if (!$this->store->rateLimit('site', $this->globalSessionsPerMinute, 60)
             || !$this->store->rateLimit("site:{$action}", $policy->sessionsPerMinute, 60)) {
             throw new CaptchaException('rate_limited', 429);
@@ -69,12 +75,16 @@ final class EmbeddedEngine
         $ttl = $policy->sessionTtlSeconds * 1000;
         $state = [
             'id' => hash('sha256', $token), 'action' => $action, 'binding' => $bound, 'type' => $kind,
-            'policy' => $policy->toArray(), 'createdMs' => $now, 'expiresMs' => $now + $ttl,
+            'variant' => $variant, 'policy' => $policy->toArray(), 'createdMs' => $now, 'expiresMs' => $now + $ttl,
             'state' => 'new', 'refreshes' => 0, 'attempts' => 0, 'challenge' => null, 'expected' => null,
             'challengeCreatedMs' => 0, 'challengeExpiresMs' => 0, 'proofHash' => '', 'proofExpiresMs' => 0,
         ];
         $this->store->create($state['id'], $state, $policy->sessionTtlSeconds);
-        return ['sessionToken' => $token, 'expiresInMs' => $ttl];
+        return [
+            'sessionToken' => $token,
+            'expiresInMs' => $ttl,
+            'accessibilityAvailable' => $policy->accessibilityAvailable(),
+        ];
     }
 
     public function issue(string $sessionToken, string $binding): array
