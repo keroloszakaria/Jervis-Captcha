@@ -1,0 +1,124 @@
+name: Embedded PHP package
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - 'composer.json'
+      - 'packages/php/**'
+      - 'packages/frontend/**'
+      - 'web/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'scripts/copy-assets.mjs'
+      - 'scripts/check-composer-manifests.php'
+      - '.github/workflows/php-embedded.yml'
+  pull_request:
+    paths:
+      - 'composer.json'
+      - 'packages/php/**'
+      - 'packages/frontend/**'
+      - 'web/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'scripts/copy-assets.mjs'
+      - 'scripts/check-composer-manifests.php'
+      - '.github/workflows/php-embedded.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedded-php-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Pin dependency resolver
+        run: npm install --global npm@11.19.1
+      - name: Install locked browser dependencies
+        run: npm ci
+      - name: Typecheck and unit test package source
+        run: |
+          npm run typecheck
+          npm test
+      - name: Build the exact package browser artifacts
+        run: npm run build
+      - name: Validate npm distribution candidate
+        run: |
+          test -s packages/frontend/dist/jervis-captcha.js
+          test -s packages/frontend/dist/index.d.ts
+          npm pack ./packages/frontend --dry-run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: |
+            packages/php/resources/dist/
+            packages/frontend/dist/
+          retention-days: 3
+          if-no-files-found: error
+
+  php-package:
+    needs: web-package
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.4']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: .embedded-assets
+      - name: Replace checked-in fallback with the verified build under test
+        shell: bash
+        run: |
+          rm -rf packages/php/resources/dist packages/frontend/dist
+          mkdir -p packages/php/resources/dist packages/frontend/dist
+          cp -a .embedded-assets/packages/php/resources/dist/. packages/php/resources/dist/
+          cp -a .embedded-assets/packages/frontend/dist/. packages/frontend/dist/
+          test -s packages/php/resources/dist/jervis-captcha.js
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd
+          tools: composer:v2
+          coverage: none
+      - name: Validate manifests and PHP syntax
+        run: |
+          php scripts/check-composer-manifests.php
+          composer validate --strict
+          (cd packages/php && composer validate --strict)
+          find packages/php/src packages/php/tests packages/php/config -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Resolve supported Laravel generation
+        run: composer update --no-interaction --prefer-dist --no-progress
+      - name: Audit Composer dependencies
+        run: composer audit
+      - name: Run embedded engine and Laravel integration tests
+        run: composer test
+      - name: Record resolved framework versions
+        if: always()
+        run: |
+          composer show laravel/framework || true
+          composer show orchestra/testbench || true
