@@ -76,7 +76,10 @@ export class CaptchaClient extends BaseCaptchaClient {
 }
 
 function elementEndpoint(element) {
-  return element.getAttribute('endpoint') || element.endpoint || '/';
+  const explicit = element.getAttribute('endpoint');
+  if (explicit) return explicit;
+  const action = element.getAttribute('action') || element.action || '';
+  return action ? '/jervis-captcha/' : (element.endpoint || '/');
 }
 
 function elementCsrf(element) {
