@@ -20,8 +20,8 @@ $mode = $argv[2] ?? '';
 $token = $argv[3] ?? '';
 $binding = 'jervis-consumer-race-binding-0001';
 
-if (!in_array($store, ['file', 'redis'], true)) {
-    fwrite(STDERR, "Store must be file or redis\n");
+if (!in_array($store, ['file', 'database', 'redis'], true)) {
+    fwrite(STDERR, "Store must be file, database or redis\n");
     exit(64);
 }
 
@@ -78,7 +78,7 @@ if ($mode === 'consume') {
     }
 }
 
-fwrite(STDERR, "Usage: ProofConsumeRace.php <file|redis> <prepare|consume> [proof]\n");
+fwrite(STDERR, "Usage: ProofConsumeRace.php <file|database|redis> <prepare|consume> [proof]\n");
 exit(64);
 
 function solveWork(string $seed, int $bits): string
