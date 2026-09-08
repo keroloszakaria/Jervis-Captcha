@@ -64,6 +64,9 @@ export class CaptchaClient {
   }
   async createSession(action: string, signal?: AbortSignal): Promise<CaptchaSession> {
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(action)) throw new CaptchaError('invalid_context');
+    // Managed session creation belongs to the host application. Native/universal
+    // deployments must create sessions server-side and pass sessionToken instead.
+    if (typeof location !== 'undefined' && this.base.origin !== location.origin) throw new CaptchaError('managed_session_requires_same_origin');
     const session = await this.post<CaptchaSession>(`session/${encodeURIComponent(action)}`, {}, signal);
     if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken) || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900_000) throw new CaptchaError('invalid_response');
     return session;
