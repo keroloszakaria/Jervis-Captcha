@@ -71,6 +71,28 @@ describe('public browser client', () => {
     const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ code: 'invalid_proof' }, 403)); const client = new CaptchaClient('/', mock);
     await expect(client.solve(token, token, { text: 'ABCDE' })).rejects.toMatchObject({ code: 'invalid_proof', status: 403 }); expect(mock).toHaveBeenCalledTimes(1);
   });
+  it('accepts the native drag shape with an omitted zero pieceTop', async () => {
+    const drag = {
+      id: token, type: 'drag', prompt: 'drag', expiresInMs: 120000, minimumDelayMs: 0,
+      image: 'data:image/png;base64,AA==', piece: 'data:image/png;base64,AA==',
+      width: 300, height: 160, pieceSize: 44,
+    };
+    await expect(new CaptchaClient('/', async () => json(drag)).issue(token)).resolves.toEqual(drag);
+  });
+  it('rejects type-specific challenge payloads missing required media or geometry', async () => {
+    const cases = [
+      { id: token, type: 'text', prompt: 'text', expiresInMs: 120000, minimumDelayMs: 0 },
+      { id: token, type: 'rotate', prompt: 'rotate', expiresInMs: 120000, minimumDelayMs: 0 },
+      { id: token, type: 'audio', prompt: 'audio', expiresInMs: 120000, minimumDelayMs: 0 },
+      { id: token, type: 'slider', prompt: 'slider', expiresInMs: 120000, minimumDelayMs: 0, image: 'data:image/png;base64,AA==', piece: 'data:image/png;base64,AA==', width: 300, height: 160, pieceSize: 44 },
+      { id: token, type: 'drag', prompt: 'drag', expiresInMs: 120000, minimumDelayMs: 0, image: 'data:image/png;base64,AA==', piece: 'data:image/png;base64,AA==' },
+      { id: token, type: 'click', prompt: 'click', expiresInMs: 120000, minimumDelayMs: 0, image: 'data:image/png;base64,AA==' },
+      { id: token, type: 'pow', prompt: 'pow', expiresInMs: 120000, minimumDelayMs: 0 },
+    ];
+    for (const bad of cases) {
+      await expect(new CaptchaClient('/', async () => json(bad as any)).issue(token)).rejects.toMatchObject({ code: 'invalid_response' });
+    }
+  });
   it('rejects external media URLs, malformed tokens and out-of-budget work', async () => {
     for (const bad of [
       { ...challenge, image: 'https://tracker.invalid/pixel' },
