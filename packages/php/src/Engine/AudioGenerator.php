@@ -61,7 +61,11 @@ final class AudioGenerator
         if (!is_string($compressed)) throw new CaptchaException('audio_asset_invalid', 500);
         $json = gzdecode($compressed, 300000);
         if (!is_string($json)) throw new CaptchaException('audio_asset_invalid', 500);
-        $decoded = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        try {
+            $decoded = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new CaptchaException('audio_asset_invalid', 500);
+        }
         if (!is_array($decoded) || count($decoded) !== 10) throw new CaptchaException('audio_asset_invalid', 500);
 
         $samples = [];
