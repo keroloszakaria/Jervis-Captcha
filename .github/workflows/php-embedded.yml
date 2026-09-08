@@ -8,6 +8,7 @@ on:
       - 'packages/php/**'
       - 'packages/frontend/**'
       - 'web/**'
+      - 'internal/captcha/audio_samples.go'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -23,6 +24,7 @@ on:
       - 'packages/php/**'
       - 'packages/frontend/**'
       - 'web/**'
+      - 'internal/captcha/audio_samples.go'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -63,6 +65,10 @@ jobs:
           npm test
       - name: Build the exact package browser artifacts
         run: npm run build
+      - name: Verify embedded audio is synchronized with the native engine
+        run: |
+          test -s packages/php/resources/audio/digits.asset
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
       - name: Validate npm distribution candidate
         run: |
           test -s packages/frontend/dist/jervis-captcha.js
@@ -74,6 +80,7 @@ jobs:
           rm -rf .embedded-package-assets
           mkdir -p .embedded-package-assets/packages/php/resources .embedded-package-assets/packages/frontend
           cp -a packages/php/resources/dist .embedded-package-assets/packages/php/resources/dist
+          cp -a packages/php/resources/audio .embedded-package-assets/packages/php/resources/audio
           cp -a packages/frontend/dist .embedded-package-assets/packages/frontend/dist
       - uses: actions/upload-artifact@v4
         with:
@@ -114,17 +121,20 @@ jobs:
       - name: Replace checked-in fallback with the verified build under test
         shell: bash
         run: |
-          rm -rf packages/php/resources/dist packages/frontend/dist
-          mkdir -p packages/php/resources/dist packages/frontend/dist
-          cp -a .embedded-assets/packages/php/resources/dist/. packages/php/resources/dist/
-          cp -a .embedded-assets/packages/frontend/dist/. packages/frontend/dist/
+          rm -rf packages/php/resources/dist packages/php/resources/audio packages/frontend/dist
+          mkdir -p packages/php/resources packages/frontend
+          cp -a .embedded-assets/packages/php/resources/dist packages/php/resources/dist
+          cp -a .embedded-assets/packages/php/resources/audio packages/php/resources/audio
+          cp -a .embedded-assets/packages/frontend/dist packages/frontend/dist
           test -s packages/php/resources/dist/jervis-captcha.js
+          test -s packages/php/resources/audio/digits.asset
           test -s packages/frontend/dist/jervis-captcha.js
           test -s packages/frontend/dist/index.d.ts
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: gd
+          extensions: gd,zlib
           tools: composer:v2
           coverage: none
       - name: Validate manifests and PHP syntax
@@ -162,13 +172,15 @@ jobs:
         with:
           name: embedded-package-assets
           path: .embedded-assets
-      - name: Use the same verified browser artifacts accepted by package tests
+      - name: Use the same verified browser and audio artifacts accepted by package tests
         shell: bash
         run: |
-          rm -rf packages/php/resources/dist packages/frontend/dist
-          mkdir -p packages/php/resources/dist packages/frontend/dist
-          cp -a .embedded-assets/packages/php/resources/dist/. packages/php/resources/dist/
-          cp -a .embedded-assets/packages/frontend/dist/. packages/frontend/dist/
+          rm -rf packages/php/resources/dist packages/php/resources/audio packages/frontend/dist
+          mkdir -p packages/php/resources packages/frontend
+          cp -a .embedded-assets/packages/php/resources/dist packages/php/resources/dist
+          cp -a .embedded-assets/packages/php/resources/audio packages/php/resources/audio
+          cp -a .embedded-assets/packages/frontend/dist packages/frontend/dist
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
       - name: Build offline Composer and frontend archives
         run: python3 scripts/package-embedded.py
       - name: Validate archive structure and checksums
@@ -179,6 +191,7 @@ jobs:
           (cd dist/embedded && sha256sum -c SHA256SUMS)
           unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'composer.json'
           unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/dist/jervis-captcha.js'
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/audio/digits.asset'
           tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/package.json'
           tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/dist/jervis-captcha.js'
       - uses: actions/upload-artifact@v4
