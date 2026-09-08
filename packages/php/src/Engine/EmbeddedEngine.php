@@ -42,7 +42,13 @@ final class EmbeddedEngine
             if (!is_string($action) || !$this->validAction($action)) {
                 throw new \InvalidArgumentException('Invalid CAPTCHA action');
             }
-            $this->actions[$action] = $policy instanceof Policy ? $policy : Policy::fromArray((array) $policy);
+            if ($policy instanceof Policy) {
+                $this->actions[$action] = $policy;
+                continue;
+            }
+            $override = (array) $policy;
+            $base = $this->defaultPolicy?->toArray() ?? [];
+            $this->actions[$action] = Policy::fromArray(array_replace($base, $override));
         }
     }
 
