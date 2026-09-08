@@ -214,7 +214,7 @@ jobs:
             statuses="$(printf '%s\n%s\n' "$status_a" "$status_b" | sort -n | tr '\n' ' ')"
             outputs="$(cat "$out_a" "$out_b" | sort | tr '\n' ' ')"
             test "$statuses" = '0 2 '
-            test "$outputs" = 'consumedrejected '
+            test "$outputs" = 'consumed rejected '
           }
 
           race_store file
@@ -228,7 +228,7 @@ jobs:
   offline-distribution:
     needs: [web-package, php-package]
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -237,6 +237,12 @@ jobs:
         with:
           name: embedded-package-assets
           path: .embedded-assets
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd,zlib
+          tools: composer:v2
+          coverage: none
       - name: Use the same verified browser and audio artifacts accepted by package tests
         shell: bash
         run: |
@@ -259,6 +265,33 @@ jobs:
           unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/audio/digits.asset'
           tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/package.json'
           tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/dist/jervis-captcha.js'
+      - name: Install the PHP ZIP from a local artifact repository with Composer networking disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-offline-consumer"
+          ARTIFACTS="$RUNNER_TEMP/jervis-captcha-composer-artifacts"
+          VERSION="$(python3 -c 'import json; print(json.load(open("dist/embedded/manifest.json", encoding="utf-8"))["version"])')"
+          rm -rf "$CONSUMER" "$ARTIFACTS"
+          mkdir -p "$ARTIFACTS"
+          cp dist/embedded/jervis-captcha-php-*.zip "$ARTIFACTS/"
+          composer create-project laravel/laravel "$CONSUMER" '^12.0' --no-interaction --prefer-dist --no-progress
+          cd "$CONSUMER"
+          composer config repositories.packagist.org false
+          composer config repositories.jervis artifact "$ARTIFACTS"
+          COMPOSER_DISABLE_NETWORK=1 composer require "jervis/captcha:${VERSION}" --no-interaction --no-progress --no-audit
+          test -s vendor/jervis/captcha/resources/dist/jervis-captcha.js
+          test -s vendor/jervis/captcha/resources/audio/digits.asset
+          cat >> .env <<'EOF'
+          CACHE_STORE=file
+          SESSION_DRIVER=file
+          JERVIS_CAPTCHA_STORE=file
+          JERVIS_CAPTCHA_SECRET=offline-consumer-secret-0123456789abcdef
+          EOF
+          php artisan config:clear
+          php artisan jervis-captcha:install --skip-doctor
+          php artisan jervis-captcha:doctor
+          php artisan route:list --path=jervis-captcha
       - uses: actions/upload-artifact@v4
         with:
           name: embedded-offline-distributions
