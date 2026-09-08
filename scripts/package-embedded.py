@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import gzip
+import hashlib
+import io
+import json
+import os
+import tarfile
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PHP = ROOT / 'packages' / 'php'
+FRONTEND = ROOT / 'packages' / 'frontend'
+OUT = ROOT / 'dist' / 'embedded'
+
+
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def require_file(path: Path) -> None:
+    if not path.is_file() or path.stat().st_size == 0:
+        raise SystemExit(f'missing required package file: {path.relative_to(ROOT)}')
+
+
+def iter_files(base: Path, roots: list[str]) -> list[Path]:
+    found: list[Path] = []
+    for item in roots:
+        path = base / item
+        if path.is_file():
+            found.append(path)
+        elif path.is_dir():
+            found.extend(p for p in path.rglob('*') if p.is_file())
+        else:
+            raise SystemExit(f'missing package input: {path.relative_to(ROOT)}')
+    return sorted(found, key=lambda p: p.relative_to(base).as_posix())
+
+
+def zip_php(version: str) -> Path:
+    target = OUT / f'jervis-captcha-php-{version}.zip'
+    files = iter_files(PHP, ['composer.json', 'README.md', 'src', 'config', 'resources'])
+    with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for path in files:
+            relative = path.relative_to(PHP).as_posix()
+            info = zipfile.ZipInfo(relative, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+    return target
+
+
+def tar_frontend(version: str) -> Path:
+    target = OUT / f'jervis-captcha-frontend-{version}.tgz'
+    files = iter_files(FRONTEND, ['package.json', 'README.md', 'dist'])
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w', format=tarfile.PAX_FORMAT) as archive:
+        for path in files:
+            relative = Path('package') / path.relative_to(FRONTEND)
+            data = path.read_bytes()
+            info = tarfile.TarInfo(relative.as_posix())
+            info.size = len(data)
+            info.mode = 0o644
+            info.uid = info.gid = 0
+            info.uname = info.gname = ''
+            info.mtime = 0
+            archive.addfile(info, io.BytesIO(data))
+    with target.open('wb') as raw:
+        with gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0, compresslevel=9) as compressed:
+            compressed.write(buffer.getvalue())
+    return target
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main() -> None:
+    php_manifest = load_json(PHP / 'composer.json')
+    frontend_manifest = load_json(FRONTEND / 'package.json')
+    php_version = str(php_manifest.get('version', ''))
+    frontend_version = str(frontend_manifest.get('version', ''))
+    if not php_version or php_version != frontend_version:
+        raise SystemExit(f'embedded package versions must match: php={php_version!r}, frontend={frontend_version!r}')
+
+    for required in [
+        PHP / 'resources' / 'dist' / 'jervis-captcha.js',
+        FRONTEND / 'dist' / 'jervis-captcha.js',
+        FRONTEND / 'dist' / 'index.d.ts',
+    ]:
+        require_file(required)
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    for stale in OUT.glob('*'):
+        if stale.is_file():
+            stale.unlink()
+
+    php_archive = zip_php(php_version)
+    frontend_archive = tar_frontend(frontend_version)
+    archives = [php_archive, frontend_archive]
+
+    checksums = '\n'.join(f'{sha256(path)}  {path.name}' for path in archives) + '\n'
+    (OUT / 'SHA256SUMS').write_text(checksums, encoding='utf-8', newline='\n')
+    manifest = {
+        'version': php_version,
+        'mode': 'embedded-php',
+        'runtimeNetworkDependency': False,
+        'php': {
+            'package': php_archive.name,
+            'name': php_manifest['name'],
+            'requires': php_manifest.get('require', {}),
+        },
+        'frontend': {
+            'package': frontend_archive.name,
+            'name': frontend_manifest['name'],
+            'type': frontend_manifest.get('type'),
+        },
+        'sha256': {path.name: sha256(path) for path in archives},
+    }
+    (OUT / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8', newline='\n')
+
+    for path in [*archives, OUT / 'manifest.json', OUT / 'SHA256SUMS']:
+        print(path.relative_to(ROOT))
+
+
+if __name__ == '__main__':
+    main()
