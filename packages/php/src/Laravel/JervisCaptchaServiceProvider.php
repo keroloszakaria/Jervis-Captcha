@@ -48,7 +48,9 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
             Route::post('/session/{action}', [CaptchaController::class, 'session'])->where('action', '[A-Za-z0-9._-]{1,64}')->name('jervis-captcha.session');
             Route::post('/v1/challenges', [CaptchaController::class, 'challenge'])->name('jervis-captcha.challenge');
             Route::post('/v1/answers', [CaptchaController::class, 'answer'])->name('jervis-captcha.answer');
-            Route::get('/assets/jervis-captcha.js', AssetController::class)->name('jervis-captcha.asset');
+            Route::get('/assets/{file}', AssetController::class)
+                ->where('file', 'jervis-captcha(?:-base)?\\.js')
+                ->name('jervis-captcha.asset');
         });
     }
 }
