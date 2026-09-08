@@ -8,6 +8,11 @@ use InvalidArgumentException;
 final readonly class Policy
 {
     public const KINDS = ['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow'];
+    public const KEYS = [
+        'types', 'accessibilityTypes', 'isAntiAI', 'workBits', 'minSolveMs',
+        'sessionTtlSeconds', 'challengeTtlSeconds', 'proofTtlSeconds',
+        'maxAttempts', 'maxRefreshes', 'sessionsPerMinute',
+    ];
 
     public function __construct(
         public array $types,
@@ -40,6 +45,12 @@ final readonly class Policy
             (int) ($value['maxRefreshes'] ?? 4),
             (int) ($value['sessionsPerMinute'] ?? 120),
         );
+    }
+
+    public static function completeArray(array $value): bool
+    {
+        foreach (self::KEYS as $key) if (!array_key_exists($key, $value)) return false;
+        return true;
     }
 
     public function toArray(): array { return get_object_vars($this); }
