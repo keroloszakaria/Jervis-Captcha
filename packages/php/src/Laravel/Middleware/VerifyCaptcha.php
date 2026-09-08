@@ -31,7 +31,13 @@ final readonly class VerifyCaptcha
                 throw new CaptchaException('invalid_proof', 403);
             }
         } catch (CaptchaException $e) {
-            if ($e->status >= 500) return $this->unavailable($request, $field);
+            // `invalid_proof` is the only expected caller-correctable failure at
+            // this boundary. Session/binding/configuration exceptions indicate
+            // verification infrastructure is unavailable and must fail closed.
+            if ($e->errorCode !== 'invalid_proof') {
+                report($e);
+                return $this->unavailable($request, $field);
+            }
             return $this->invalid($request, $field);
         } catch (\Throwable $e) {
             report($e);
