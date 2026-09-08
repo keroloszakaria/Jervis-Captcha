@@ -8,6 +8,7 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Jervis\Captcha\Contracts\BindingResolver;
 use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Engine\EmbeddedEngine;
@@ -25,9 +26,34 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(dirname(__DIR__, 2) . '/config/jervis-captcha.php', 'jervis-captcha');
-        $this->app->singleton(Store::class, fn ($app) => new LaravelCacheStore($app->make(CacheManager::class), config('jervis-captcha.store'), (string) config('jervis-captcha.cache_prefix', 'jervis-captcha:')));
-        $this->app->singleton(BindingResolver::class, fn ($app) => $app->make((string) config('jervis-captcha.binding_resolver', LaravelSessionBinding::class)));
-        $this->app->singleton(EmbeddedEngine::class, fn ($app) => new EmbeddedEngine($app->make(Store::class), (string) config('jervis-captcha.secret'), (array) config('jervis-captcha.actions', []), (array) config('jervis-captcha.default_policy', []), null, (int) config('jervis-captcha.global_sessions_per_minute', 300)));
+        $this->app->singleton(Store::class, fn ($app) => new LaravelCacheStore(
+            $app->make(CacheManager::class),
+            config('jervis-captcha.store'),
+            (string) config('jervis-captcha.cache_prefix', 'jervis-captcha:'),
+        ));
+        $this->app->singleton(BindingResolver::class, fn ($app) => $app->make(
+            (string) config('jervis-captcha.binding_resolver', LaravelSessionBinding::class),
+        ));
+        $this->app->singleton(EmbeddedEngine::class, function ($app): EmbeddedEngine {
+            $actions = config('jervis-captcha.actions', []);
+            $defaultPolicy = config('jervis-captcha.default_policy');
+
+            if (!is_array($actions)) {
+                throw new InvalidArgumentException('jervis-captcha.actions must be an array');
+            }
+            if ($defaultPolicy !== null && !is_array($defaultPolicy)) {
+                throw new InvalidArgumentException('jervis-captcha.default_policy must be an array or null');
+            }
+
+            return new EmbeddedEngine(
+                $app->make(Store::class),
+                (string) config('jervis-captcha.secret'),
+                $actions,
+                $defaultPolicy,
+                null,
+                (int) config('jervis-captcha.global_sessions_per_minute', 300),
+            );
+        });
     }
 
     public function boot(Router $router): void
