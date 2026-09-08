@@ -51,6 +51,11 @@ jobs:
         run: npm test -- --reporter=json --outputFile=web-test.json
       - name: Build embedded offline widget and package assets
         run: npm run build
+      - name: Verify embedded audio stays synchronized with native generated audio
+        shell: bash
+        run: |
+          test -s packages/php/resources/audio/digits.asset
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
       - name: Validate frontend npm package
         shell: bash
         run: |
@@ -67,7 +72,7 @@ jobs:
       - name: PHP package syntax and existing SDK validation
         run: |
           php scripts/check-composer-manifests.php
-          find packages/php/src packages/php/tests packages/php/config -name '*.php' -print0 | xargs -0 -n1 php -l
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l sdk/php/JervisCaptcha.php
           python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
       - name: Build .NET SDK
@@ -137,6 +142,7 @@ jobs:
             package-lock.json
             internal/captcha/audio_samples.go
             internal/web/dist/
+            packages/php/resources/audio/
             packages/php/resources/dist/
             packages/frontend/dist/
             validation.json
@@ -146,7 +152,7 @@ jobs:
       matrix:
         php: ['8.2', '8.4']
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,7 +160,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: gd
+          extensions: gd,zlib
           tools: composer:v2
           coverage: none
       - name: Validate Composer package manifests
@@ -162,7 +168,7 @@ jobs:
           php scripts/check-composer-manifests.php
           composer validate --strict
           (cd packages/php && composer validate --strict)
-      - name: Resolve supported Laravel generation and run package tests
+      - name: Resolve a supported Laravel generation and run package tests
         run: |
           composer update --no-interaction --prefer-dist --no-progress
           composer audit
@@ -237,7 +243,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add go.mod go.sum package-lock.json internal/captcha/audio_samples.go internal/web/dist packages/php/resources/dist packages/frontend/dist validation.json
+          git add go.mod go.sum package-lock.json internal/captcha/audio_samples.go internal/web/dist packages/php/resources/audio packages/php/resources/dist packages/frontend/dist validation.json
           if ! git diff --cached --quiet; then
             git commit -m 'build: lock dependencies and embed verified package assets'
             git push origin "HEAD:$BRANCH_NAME"
