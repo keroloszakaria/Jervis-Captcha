@@ -156,7 +156,7 @@ export class JervisCaptcha extends LitElement {
     event.preventDefault(); this.cursor = { x: Math.max(0, Math.min(300, p.x)), y: Math.max(0, Math.min(160, p.y)) };
   }
   private range(key: 'x' | 'y' | 'angle', title: string, max: number) {
-    return html`<label>${title}<output>${this[key]}</output><input type="range" min="0" max=${max} step="1" .value=${String(this[key])} aria-label=${title} ?disabled=${this.disabled || this.status !== 'ready'} @input=${(e: Event) => { this[key] = Number((e.target as HTMLInputElement).value); }}/></label>`;
+    return html`<label>${title}<span class="range-value" aria-hidden="true">${this[key]}</span><input type="range" min="0" max=${max} step="1" .value=${String(this[key])} aria-label=${title} ?disabled=${this.disabled || this.status !== 'ready'} @input=${(e: Event) => { this[key] = Number((e.target as HTMLInputElement).value); }}/></label>`;
   }
   private challengeView() {
     const c = this.challenge; if (!c) return nothing;

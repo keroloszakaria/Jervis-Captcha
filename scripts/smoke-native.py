@@ -22,10 +22,14 @@ binary = Path(sys.argv[1]).resolve(strict=True)
 if os.name != "nt":
     binary.chmod(binary.stat().st_mode | 0o100)
 checks = []
+network_isolated = "--network-isolated" in sys.argv[2:]
+if network_isolated:
+    assert sys.platform == "linux" and {name for _, name in socket.if_nameindex()} == {"lo"}, "Expected a loopback-only network namespace"
+    checks.append("network namespace contains only loopback; no external network interface")
 env = {**os.environ, "PATH": "", "HTTP_PROXY": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1"}
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 process = None
-with tempfile.TemporaryDirectory(prefix="jervis-native-") as directory:
+with tempfile.TemporaryDirectory(prefix="jervis native ") as directory:
     work = Path(directory)
     config_path = work / "jervis.json"
     subprocess.run([str(binary), "init", "--config", str(config_path)], check=True, env=env, cwd=work, capture_output=True)
@@ -136,7 +140,7 @@ with tempfile.TemporaryDirectory(prefix="jervis-native-") as directory:
             checks.append("eight concurrent consumers have exactly one winner")
         finally:
             stop()
-report = {"platform": platform.platform(), "machine": platform.machine(), "version": version, "checks": checks, "passed": True, "networkIsolationClaim": "none; separate packet-level acceptance required"}
+report = {"platform": platform.platform(), "machine": platform.machine(), "version": version, "checks": checks, "passed": True, "networkIsolationClaim": "loopback-only Linux namespace; functional egress isolation, not packet-level attempt auditing" if network_isolated else "none; separate packet-level acceptance required"}
 output = Path(os.environ.get("NATIVE_REPORT", "native-validation.json"))
 output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(report, indent=2))

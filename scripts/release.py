@@ -43,6 +43,14 @@ for directory in sorted(out.iterdir()):
         continue
     shutil.copy2(root / "README.md", directory / "README.md")
     shutil.copy2(root / "SECURITY.md", directory / "SECURITY.md")
+    shutil.copy2(root / "LICENSE", directory / "LICENSE")
+    shutil.copytree(root / "sdk", directory / "sdk", dirs_exist_ok=True, ignore=shutil.ignore_patterns("bin", "obj", "__pycache__", "*.pyc", "*.test.ts"))
+    node_dist = directory / "sdk/node/dist"
+    node_dist.mkdir(parents=True, exist_ok=True)
+    for filename in ("client.js", "client.d.ts"):
+        shutil.copy2(root / ".sdk-build" / filename, node_dist / filename)
+    (node_dist / "package.json").write_text('{"type":"module"}\n')
+    shutil.copytree(root / "internal/web/dist", directory / "web", dirs_exist_ok=True)
     shutil.copytree(root / "docs", directory / "docs", dirs_exist_ok=True, ignore=shutil.ignore_patterns(".vitepress", "node_modules"))
     shutil.copytree(licenses, directory / "third-party-licenses", dirs_exist_ok=True)
     shutil.copy2(out / "dependency-inventory.json", directory)

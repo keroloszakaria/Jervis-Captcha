@@ -25,6 +25,10 @@ path = root / "test-results/browser.json"
 if path.exists():
     obj = json.loads(path.read_text())
     results["browser"] = {"executed": True, **obj.get("stats", {})}
+path = root / "sdk-validation.json"
+results["sdk"] = {"executed": path.exists()}
+if path.exists():
+    results["sdk"].update(json.loads(path.read_text()))
 path = root / "npm-audit.json"
 if path.exists():
     results["npmAudit"] = json.loads(path.read_text()).get("metadata", {}).get("vulnerabilities", {})

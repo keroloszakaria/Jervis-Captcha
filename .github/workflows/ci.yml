@@ -3,6 +3,7 @@ on:
   push:
     branches: [main, 'codex/**']
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -61,10 +62,18 @@ jobs:
           python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
       - name: Build .NET SDK
         run: dotnet build sdk/dotnet/Jervis.Captcha.csproj --configuration Release --nologo
+      - name: Exercise all four backend SDKs against the production engine
+        shell: bash
+        run: |
+          mkdir -p .sdk-build
+          npx tsc sdk/node/client.ts --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --declaration --outDir .sdk-build
+          go build -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
+          dotnet build tests/consumers/dotnet/Consumer.csproj --configuration Release --nologo
+          python3 scripts/test-sdk-integration.py .sdk-build/jervis-captcha
       - name: Build local documentation
         run: npm run docs:build
       - name: Install browser test runtimes
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Real-browser integration and offline checks
         run: npm run test:e2e
       - name: Compile native air-gapped distributions
@@ -87,6 +96,7 @@ jobs:
           path: |
             validation.json
             npm-audit.json
+            sdk-validation.json
             go-test.jsonl
             web-test.json
             test-results/
@@ -119,6 +129,9 @@ jobs:
           - os: windows-latest
             target: windows-amd64
             ext: '.exe'
+          - os: macos-15
+            target: darwin-arm64
+            ext: ''
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -136,10 +149,16 @@ jobs:
         run: python -m zipfile -e .artifacts/jervis-captcha-${{ matrix.target }}.zip .native
       - name: Native first-boot, persistence and replay acceptance
         run: python scripts/smoke-native.py .native/jervis-captcha-${{ matrix.target }}/jervis-captcha${{ matrix.ext }}
+      - name: Linux acceptance with external networking removed
+        if: matrix.target == 'linux-amd64'
+        shell: bash
+        run: bash scripts/test-airgap.sh .native/jervis-captcha-${{ matrix.target }}/jervis-captcha
       - uses: actions/upload-artifact@v4
         with:
           name: native-validation-${{ matrix.target }}
-          path: native-validation.json
+          path: |
+            native-validation.json
+            airgap-validation.json
   persist-generated:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/')
     needs: [validate, native]

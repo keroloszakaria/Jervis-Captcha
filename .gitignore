@@ -17,3 +17,9 @@ sdk/dotnet/bin/
 sdk/dotnet/obj/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.sdk-build/
+tests/consumers/dotnet/bin/
+tests/consumers/dotnet/obj/
+sdk-validation.json
+native-validation.json
+airgap-validation.json
