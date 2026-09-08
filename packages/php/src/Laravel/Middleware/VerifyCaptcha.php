@@ -22,7 +22,7 @@ final readonly class VerifyCaptcha
             $field = EmbeddedConfig::fieldName();
         } catch (\Throwable $e) {
             report($e);
-            return $this->reject($request, 'jervisCaptchaToken');
+            return $this->unavailable($request, 'jervisCaptchaToken');
         }
 
         $token = (string) ($request->header('X-Jervis-Captcha') ?: $request->input($field, ''));
@@ -30,15 +30,18 @@ final readonly class VerifyCaptcha
             if ($token === '' || !$this->engine->consume($token, $action, $this->binding->resolve($request))) {
                 throw new CaptchaException('invalid_proof', 403);
             }
+        } catch (CaptchaException $e) {
+            if ($e->status >= 500) return $this->unavailable($request, $field);
+            return $this->invalid($request, $field);
         } catch (\Throwable $e) {
-            if (!$e instanceof CaptchaException) report($e);
-            return $this->reject($request, $field);
+            report($e);
+            return $this->unavailable($request, $field);
         }
 
         return $next($request);
     }
 
-    private function reject(Request $request, string $field): Response
+    private function invalid(Request $request, string $field): Response
     {
         if ($request->expectsJson()) {
             return response()->json([
@@ -47,5 +50,13 @@ final readonly class VerifyCaptcha
             ], 422);
         }
         throw ValidationException::withMessages([$field => 'CAPTCHA verification failed.']);
+    }
+
+    private function unavailable(Request $request, string $field): Response
+    {
+        return response()->json([
+            'message' => 'CAPTCHA verification is temporarily unavailable',
+            'errors' => [$field => ['CAPTCHA verification is temporarily unavailable.']],
+        ], 503);
     }
 }
