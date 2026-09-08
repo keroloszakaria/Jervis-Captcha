@@ -17,7 +17,15 @@ return [
         'answer_per_binding_per_minute'=>(int)env('JERVIS_CAPTCHA_ANSWERS_PER_BINDING_PER_MINUTE',60),
     ],
     'routes'=>['enabled'=>true,'prefix'=>'jervis-captcha','middleware'=>['web']],
-    'default_policy'=>['types'=>['text','slider','rotate'],'isAntiAI'=>true,'workBits'=>14,'minSolveMs'=>400,'sessionTtlSeconds'=>300,'challengeTtlSeconds'=>120,'proofTtlSeconds'=>60,'maxAttempts'=>3,'maxRefreshes'=>4,'sessionsPerMinute'=>120],
+    'default_policy'=>[
+        'types'=>['text','slider','rotate'],
+        // The browser can request the accessible variant, but it cannot select
+        // a concrete challenge type. Only this server-owned allowlist is used.
+        'accessibilityTypes'=>['audio'],
+        'isAntiAI'=>true,'workBits'=>14,'minSolveMs'=>400,'sessionTtlSeconds'=>300,
+        'challengeTtlSeconds'=>120,'proofTtlSeconds'=>60,'maxAttempts'=>3,
+        'maxRefreshes'=>4,'sessionsPerMinute'=>120,
+    ],
     // Optional per-action overrides. The browser can name an action but can never
     // choose its policy; unknown valid actions use the server-owned default above.
     'actions'=>[],
