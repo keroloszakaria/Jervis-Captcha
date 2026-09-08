@@ -44,9 +44,11 @@ test('managed frontend package defaults to the embedded Laravel endpoint and ren
     document.body.append(element);
   });
   const first = await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).toMatch(/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/).then(() => page.locator('#managed-captcha').evaluate((node: any) => node.token));
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
   await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
   await page.locator('#managed-captcha').evaluate((node: any) => node.renew());
   await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).not.toBe(first);
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
   await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
 });
 
@@ -58,6 +60,7 @@ test('managed widget switches to a server-approved accessible audio challenge', 
     document.body.append(element);
   });
   await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
   await expect(page.locator('#accessible-captcha audio')).toHaveCount(0);
   const accessible = page.getByRole('button', { name: 'Use an accessible challenge', exact: true });
   await expect(accessible).toBeVisible();
@@ -65,6 +68,7 @@ test('managed widget switches to a server-approved accessible audio challenge', 
   await expect(page.locator('#accessible-captcha audio')).toBeVisible();
   await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
   await expect(accessible).toHaveCount(0);
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
   await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
 });
 
