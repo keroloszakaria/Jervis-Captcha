@@ -4,6 +4,7 @@ import { CaptchaClient, CaptchaError } from '../src/client';
 import { sha256, workMatches } from '../src/sha256';
 const token = 'a'.repeat(43);
 const challenge = { id: token, type: 'math', prompt: '2 + 3 = ?', expiresInMs: 120000, minimumDelayMs: 0 };
+const managedSession = { sessionToken: token, expiresInMs: 300000, accessibilityAvailable: true };
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 
 describe('SHA-256 proof of work', () => {
@@ -26,17 +27,27 @@ describe('public browser client', () => {
     await client.issue(token); expect(String(mock.mock.calls[0]![0])).toBe('https://intranet.test/captcha/v1/challenges');
     const init = mock.mock.calls[0]![1] as RequestInit; expect(init.credentials).toBe('same-origin'); expect(init.redirect).toBe('error'); expect(JSON.stringify(init)).not.toContain('Authorization');
   });
-  it('creates embedded sessions without exposing policy choices', async () => {
-    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ sessionToken: token, expiresInMs: 300000 }));
+  it('creates managed sessions using only server-approved variants', async () => {
+    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(managedSession));
     const client = new CaptchaClient('https://intranet.test/jervis-captcha/', mock);
-    await expect(client.createSession('signup')).resolves.toEqual({ sessionToken: token, expiresInMs: 300000 });
+    await expect(client.createSession('signup')).resolves.toEqual(managedSession);
     expect(String(mock.mock.calls[0]![0])).toBe('https://intranet.test/jervis-captcha/session/signup');
-    expect(JSON.parse(String((mock.mock.calls[0]![1] as RequestInit).body))).toEqual({});
+    expect(JSON.parse(String((mock.mock.calls[0]![1] as RequestInit).body))).toEqual({ variant: 'standard' });
+
+    mock.mockClear();
+    await expect(client.createSession('signup', 'accessible')).resolves.toEqual(managedSession);
+    expect(JSON.parse(String((mock.mock.calls[0]![1] as RequestInit).body))).toEqual({ variant: 'accessible' });
+
     await expect(client.createSession('../admin')).rejects.toMatchObject({ code: 'invalid_context' });
+    await expect(client.createSession('signup', 'audio' as any)).rejects.toMatchObject({ code: 'invalid_context' });
     expect(mock).toHaveBeenCalledTimes(1);
   });
+  it('fails closed when managed capability metadata is malformed', async () => {
+    const client = new CaptchaClient('https://intranet.test/jervis-captcha/', async () => json({ sessionToken: token, expiresInMs: 300000 }));
+    await expect(client.createSession('signup')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
   it('sends CSRF to same-origin embedded routes and rejects cross-origin managed bootstrap', async () => {
-    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ sessionToken: token, expiresInMs: 300000 }));
+    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(managedSession));
     vi.stubGlobal('location', new URL('https://intranet.test/form'));
     await new CaptchaClient('/jervis-captcha/', mock, 'csrf-value').createSession('signup');
     expect((mock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ 'X-CSRF-TOKEN': 'csrf-value' });
