@@ -88,6 +88,7 @@ func main() {
 			"sessionToken": result.SessionToken,
 			"expiresInMs": result.ExpiresInMS,
 			"accessibilityAvailable": true,
+			"fieldName": "fixtureCaptchaProof",
 		})
 	})
 	mux.Handle("/jervis-captcha/", http.StripPrefix("/jervis-captcha", api))
