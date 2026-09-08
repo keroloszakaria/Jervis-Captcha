@@ -9,6 +9,7 @@ on:
       - 'packages/frontend/**'
       - 'web/**'
       - 'internal/captcha/audio_samples.go'
+      - 'tests/consumers/laravel/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -25,6 +26,7 @@ on:
       - 'packages/frontend/**'
       - 'web/**'
       - 'internal/captcha/audio_samples.go'
+      - 'tests/consumers/laravel/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -100,16 +102,19 @@ jobs:
             label: '11'
             laravel: '^11.45.2'
             testbench: '^9.15'
+            app: '^11.0'
           - php: '8.2'
             label: '12'
             laravel: '^12.40.0'
             testbench: '^10.8'
+            app: '^12.0'
           - php: '8.4'
             label: '13'
             laravel: '^13.23.0'
             testbench: '^11.2'
+            app: '^13.0'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -142,8 +147,8 @@ jobs:
           php scripts/check-composer-manifests.php
           composer validate --strict
           (cd packages/php && composer validate --strict)
-          find packages/php/src packages/php/tests packages/php/config -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Pin Laravel generation under test
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Pin Laravel generation under package test
         env:
           LARAVEL_CONSTRAINT: ${{ matrix.laravel }}
           TESTBENCH_CONSTRAINT: ${{ matrix.testbench }}
@@ -152,8 +157,32 @@ jobs:
           composer update --no-interaction --prefer-dist --no-progress --with-all-dependencies
       - name: Audit Composer dependencies
         run: composer audit
-      - name: Run embedded engine and Laravel integration tests
+      - name: Run embedded engine and Testbench integration tests
         run: composer test
+      - name: Install the package into a fresh Laravel application
+        shell: bash
+        env:
+          LARAVEL_APP_CONSTRAINT: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-laravel-${{ matrix.label }}"
+          rm -rf "$CONSUMER"
+          composer create-project laravel/laravel "$CONSUMER" "$LARAVEL_APP_CONSTRAINT" --no-interaction --prefer-dist --no-progress
+          cd "$CONSUMER"
+          composer config repositories.jervis path "$GITHUB_WORKSPACE"
+          composer require 'jervis/captcha:@dev' --no-interaction --prefer-dist --no-progress --with-all-dependencies
+          cat >> .env <<'EOF'
+          CACHE_STORE=file
+          SESSION_DRIVER=file
+          JERVIS_CAPTCHA_STORE=file
+          JERVIS_CAPTCHA_SECRET=consumer-fixture-secret-0123456789abcdef
+          EOF
+          php artisan config:clear
+          php artisan jervis-captcha:install --skip-doctor
+          php artisan jervis-captcha:doctor
+          php artisan route:list --path=jervis-captcha
+          cp "$GITHUB_WORKSPACE/tests/consumers/laravel/JervisCaptchaConsumerTest.php" tests/Feature/JervisCaptchaConsumerTest.php
+          php artisan test tests/Feature/JervisCaptchaConsumerTest.php
       - name: Record resolved framework versions
         if: always()
         run: |
