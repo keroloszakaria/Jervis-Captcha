@@ -17,14 +17,32 @@ final readonly class VerifyCaptcha
 
     public function handle(Request $request, Closure $next, string $action): Response
     {
-        $token = (string) ($request->header('X-Jervis-Captcha') ?: $request->input('jervisCaptchaToken', ''));
-        try {
-            if ($token === '' || !$this->engine->consume($token, $action, $this->binding->resolve($request))) throw new CaptchaException('invalid_proof', 403);
-        } catch (\Throwable $e) {
-            if (!$e instanceof CaptchaException) report($e);
-            if ($request->expectsJson()) return response()->json(['message' => 'CAPTCHA verification failed', 'errors' => ['jervisCaptchaToken' => ['CAPTCHA verification failed.']]], 422);
-            throw ValidationException::withMessages(['jervisCaptchaToken' => 'CAPTCHA verification failed.']);
+        $field = (string) config('jervis-captcha.field_name', 'jervisCaptchaToken');
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/D', $field) !== 1) {
+            return $this->reject($request, 'jervisCaptchaToken', new CaptchaException('verification_unavailable', 503));
         }
+
+        $token = (string) ($request->header('X-Jervis-Captcha') ?: $request->input($field, ''));
+        try {
+            if ($token === '' || !$this->engine->consume($token, $action, $this->binding->resolve($request))) {
+                throw new CaptchaException('invalid_proof', 403);
+            }
+        } catch (\Throwable $e) {
+            return $this->reject($request, $field, $e);
+        }
+
         return $next($request);
+    }
+
+    private function reject(Request $request, string $field, \Throwable $error): Response
+    {
+        if (!$error instanceof CaptchaException) report($error);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'CAPTCHA verification failed',
+                'errors' => [$field => ['CAPTCHA verification failed.']],
+            ], 422);
+        }
+        throw ValidationException::withMessages([$field => 'CAPTCHA verification failed.']);
     }
 }
