@@ -45,7 +45,9 @@ final class CaptchaController extends Controller
         $request->validate([
             'sessionToken' => ['required', 'string', 'size:43'],
             'challengeId' => ['required', 'string', 'size:43'],
-            'answer' => ['required', 'array:text,x,y,angle,points', 'max:5'],
+            // PoW has no human answer fields, so an empty object/array is valid.
+            // `present` keeps the protocol shape mandatory without rejecting it.
+            'answer' => ['present', 'array:text,x,y,angle,points', 'max:5'],
             'answer.text' => ['nullable', 'string', 'max:128'],
             'answer.x' => ['nullable', 'numeric', 'between:-10000,10000'],
             'answer.y' => ['nullable', 'numeric', 'between:-10000,10000'],
