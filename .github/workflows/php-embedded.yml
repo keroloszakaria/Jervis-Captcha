@@ -189,8 +189,13 @@ jobs:
           REDIS_CLIENT=phpredis
           REDIS_HOST=127.0.0.1
           REDIS_PORT=6379
+          DB_CONNECTION=sqlite
           EOF
+          mkdir -p database
+          touch database/database.sqlite
+          printf 'DB_DATABASE=%s/database/database.sqlite\n' "$CONSUMER" >> .env
           php artisan config:clear
+          php artisan migrate --force
           php artisan jervis-captcha:install --skip-doctor
           php artisan jervis-captcha:doctor
           php artisan route:list --path=jervis-captcha
@@ -218,6 +223,7 @@ jobs:
           }
 
           race_store file
+          race_store database
           race_store redis
       - name: Record resolved framework versions
         if: always()
