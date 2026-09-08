@@ -20,7 +20,7 @@ export class JervisCaptcha extends LitElement {
     answerText: { state: true }, x: { state: true }, y: { state: true }, angle: { state: true },
     points: { state: true }, cursor: { state: true }, working: { state: true },
   };
-  endpoint = '/'; action = ''; csrfToken = ''; sessionToken = ''; presentation: 'inline' | 'checkbox' | 'invisible' = 'inline';
+  endpoint = ''; action = ''; csrfToken = ''; sessionToken = ''; presentation: 'inline' | 'checkbox' | 'invisible' = 'inline';
   locale: 'en' | 'ar' = 'en'; theme: 'light' | 'dark' | 'auto' = 'auto'; disabled = false; name = 'jervisCaptchaToken';
   private status: Status = 'idle'; private challenge?: Challenge; private errorCode = '';
   private answerText = ''; private x = 0; private y = 0; private angle = 0;
@@ -31,7 +31,8 @@ export class JervisCaptcha extends LitElement {
   constructor() { super(); if (typeof this.attachInternals === 'function') this.internals = this.attachInternals(); }
   get token(): string { return this.status === 'success' ? this.proof : ''; }
   private get activeSessionToken(): string { return this.sessionToken || this.managedSessionToken; }
-  private client(): CaptchaClient { return new CaptchaClient(this.endpoint, globalThis.fetch, this.csrfToken); }
+  private get resolvedEndpoint(): string { return this.endpoint || (this.action && !this.sessionToken ? '/jervis-captcha/' : '/'); }
+  private client(): CaptchaClient { return new CaptchaClient(this.resolvedEndpoint, globalThis.fetch, this.csrfToken); }
   private get t() { return messages[this.locale === 'ar' ? 'ar' : 'en']; }
   private event(name: string, detail?: unknown) { this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true })); }
   private invalidate() {
@@ -136,12 +137,13 @@ export class JervisCaptcha extends LitElement {
       const remaining = this.readyAt - performance.now();
       if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
       if (op !== this.operation) return;
+      const token = this.activeSessionToken;
+      if (!token) { this.showError(new CaptchaError('invalid_session')); return; }
       const begin = performance.now();
-      const sessionToken = this.activeSessionToken; if (!sessionToken) throw new CaptchaError('invalid_session');
-      const proof: Proof = await this.client().solve(sessionToken, c.id, this.answer(), this.workNonce, this.controller?.signal);
+      const proof: Proof = await this.client().solve(token, c.id, this.answer(), this.workNonce, this.controller?.signal);
       if (op !== this.operation) return;
       const ttl = proof.expiresInMs - (performance.now() - begin);
-      if (ttl <= 0) { this.invalidate(); this.managedSessionToken = ''; this.status = 'expired'; this.event('jervis-expired'); return; }
+      if (ttl <= 0) { this.invalidate(); this.status = 'expired'; this.event('jervis-expired'); return; }
       this.proof = proof.token; this.status = 'success'; this.challenge = undefined;
       this.internals?.setValidity({}); this.internals?.setFormValue(proof.token);
       this.setExpiry(ttl, op); this.event('jervis-success', { ...proof, expiresInMs: ttl });
