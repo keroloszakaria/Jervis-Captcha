@@ -95,7 +95,10 @@ export class JervisCaptcha extends LitElement {
       if (!token) {
         const session = await this.client().createSession(this.action, this.managedVariant, this.controller.signal);
         if (op !== this.operation) return;
-        this.managedSessionToken = session.sessionToken; this.accessibilityAvailable = session.accessibilityAvailable; token = session.sessionToken;
+        this.managedSessionToken = session.sessionToken;
+        this.accessibilityAvailable = session.accessibilityAvailable;
+        this.name = session.fieldName;
+        token = session.sessionToken;
       }
       const c = await this.client().issue(token, this.controller.signal);
       if (op !== this.operation) return;
@@ -144,6 +147,7 @@ export class JervisCaptcha extends LitElement {
     if (type === 'drag') return { x: this.x, y: this.y };
     if (type === 'rotate') return { angle: this.angle };
     if (type === 'click') return { points: this.points };
+    if (type === 'pow') return {};
     return { text: this.answerText };
   }
   async verify(): Promise<void> {
