@@ -118,7 +118,12 @@ final class EmbeddedEngine
             $state['refreshes']++;
             $state['challengeCreatedMs'] = $now;
             $state['challengeExpiresMs'] = $expires;
-            $state['challenge'] = $challenge;
+            // Persist only verification metadata. Rendered image/audio payloads are
+            // returned to this request and do not belong in the cache-backed state.
+            $state['challenge'] = [
+                'id' => $challenge['id'],
+                'work' => $challenge['work'] ?? null,
+            ];
             $state['expected'] = $expected;
             return ['state' => $state, 'result' => $challenge];
         });
