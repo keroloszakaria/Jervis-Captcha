@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Jervis\Captcha\Tests;
 
+use InvalidArgumentException;
 use Jervis\Captcha\Engine\EmbeddedEngine;
 use Jervis\Captcha\Engine\MemoryStore;
 use PHPUnit\Framework\TestCase;
@@ -49,5 +50,18 @@ final class PolicyOverrideTest extends TestCase
         self::assertSame(4, $policy['maxAttempts']);
         self::assertSame(7, $policy['maxRefreshes']);
         self::assertSame(31, $policy['sessionsPerMinute']);
+    }
+
+    public function testActionOnlyModeRejectsImplicitLibraryDefaults(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('must define every policy field');
+
+        new EmbeddedEngine(
+            new MemoryStore(),
+            str_repeat('s', 40),
+            ['login' => ['types' => ['pow'], 'workBits' => 12]],
+            null,
+        );
     }
 }
