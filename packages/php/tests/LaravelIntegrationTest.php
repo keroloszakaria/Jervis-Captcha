@@ -5,6 +5,7 @@ namespace Jervis\Captcha\Tests;
 
 use Illuminate\Support\Facades\Blade;
 use Jervis\Captcha\Laravel\JervisCaptchaServiceProvider;
+use Jervis\Captcha\Laravel\Support\RequestLimiter;
 use Orchestra\Testbench\TestCase;
 
 final class LaravelIntegrationTest extends TestCase
@@ -21,6 +22,11 @@ final class LaravelIntegrationTest extends TestCase
         $app['config']->set('session.driver', 'array');
         $app['config']->set('jervis-captcha.secret', str_repeat('s', 40));
         $app['config']->set('jervis-captcha.store', 'array');
+        $app['config']->set('jervis-captcha.request_limits', [
+            'global_per_minute' => 1000,
+            'challenge_per_binding_per_minute' => 100,
+            'answer_per_binding_per_minute' => 100,
+        ]);
         $app['config']->set('jervis-captcha.default_policy', [
             'types' => ['pow'], 'isAntiAI' => false, 'workBits' => 12, 'minSolveMs' => 0,
             'sessionTtlSeconds' => 60, 'challengeTtlSeconds' => 30, 'proofTtlSeconds' => 30,
@@ -60,6 +66,33 @@ final class LaravelIntegrationTest extends TestCase
             'workNonce' => $this->solveWork($challenge['work']['seed'], $challenge['work']['bits']),
         ])->assertOk()->json();
         $this->postJson('/protected', ['jervisCaptchaToken' => $proof['token']])->assertStatus(422);
+    }
+
+    public function testChallengeBudgetCannotBeBypassedByRotatingActions(): void
+    {
+        $this->app['config']->set('jervis-captcha.request_limits.challenge_per_binding_per_minute', 2);
+        $this->app['config']->set('jervis-captcha.request_limits.global_per_minute', 100);
+
+        $first = $this->postJson('/jervis-captcha/session/action-a')->assertOk()->json('sessionToken');
+        $second = $this->postJson('/jervis-captcha/session/action-b')->assertOk()->json('sessionToken');
+        $third = $this->postJson('/jervis-captcha/session/action-c')->assertOk()->json('sessionToken');
+
+        $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $first])->assertOk();
+        $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $second])->assertOk();
+        $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $third])
+            ->assertStatus(429)
+            ->assertJson(['code' => 'rate_limited']);
+    }
+
+    public function testInvalidRequestBudgetFailsClosed(): void
+    {
+        $this->app['config']->set('jervis-captcha.request_limits.global_per_minute', 0);
+        self::assertFalse(RequestLimiter::configurationValid());
+
+        $session = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json('sessionToken');
+        $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $session])
+            ->assertStatus(503)
+            ->assertJson(['code' => 'verification_unavailable']);
     }
 
     public function testBladeComponentNeedsOnlyAnAction(): void
