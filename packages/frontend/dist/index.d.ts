@@ -1,4 +1,5 @@
 export type ChallengeType = 'text' | 'slider' | 'drag' | 'rotate' | 'click' | 'audio' | 'math' | 'logic' | 'pow';
+export type SessionVariant = 'standard' | 'accessible';
 export interface Point { x: number; y: number }
 export interface Answer { text?: string; x?: number; y?: number; angle?: number; points?: Point[] }
 export interface Work { seed: string; bits: number }
@@ -18,7 +19,7 @@ export interface Challenge {
   work?: Work;
 }
 export interface Proof { token: string; expiresInMs: number }
-export interface CaptchaSession { sessionToken: string; expiresInMs: number }
+export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean }
 
 export declare class CaptchaError extends Error {
   readonly code: string;
@@ -28,7 +29,7 @@ export declare class CaptchaError extends Error {
 
 export declare class CaptchaClient {
   constructor(endpoint?: string, transport?: typeof fetch, csrfToken?: string);
-  createSession(action: string, signal?: AbortSignal): Promise<CaptchaSession>;
+  createSession(action: string, variant?: SessionVariant, signal?: AbortSignal): Promise<CaptchaSession>;
   issue(sessionToken: string, signal?: AbortSignal): Promise<Challenge>;
   solve(sessionToken: string, challengeId: string, answer: Answer, workNonce?: string, signal?: AbortSignal): Promise<Proof>;
 }
