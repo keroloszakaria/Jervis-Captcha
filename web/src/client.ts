@@ -8,6 +8,7 @@ export interface Challenge {
   expiresInMs: number; minimumDelayMs: number; work?: Work;
 }
 export interface Proof { token: string; expiresInMs: number }
+export interface CaptchaSession { sessionToken: string; expiresInMs: number }
 export class CaptchaError extends Error {
   constructor(public readonly code: string, public readonly status = 0) { super(code); this.name = 'CaptchaError'; }
 }
@@ -21,10 +22,19 @@ function validChallenge(c: Challenge): boolean {
     && (!c.piece || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.piece))
     && (!c.audio || /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(c.audio));
 }
+function csrfHeader(target: URL, explicitToken: string): Record<string, string> {
+  if (typeof location === 'undefined' || target.origin !== location.origin) return {};
+  const direct = explicitToken || (typeof document === 'undefined' ? '' : document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '');
+  if (direct) return { 'X-CSRF-TOKEN': direct };
+  if (typeof document === 'undefined') return {};
+  const encoded = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('XSRF-TOKEN='))?.slice('XSRF-TOKEN='.length);
+  if (!encoded) return {};
+  try { return { 'X-XSRF-TOKEN': decodeURIComponent(encoded) }; } catch { return {}; }
+}
 /** Browser-only public client. No site secret is accepted or stored here. */
 export class CaptchaClient {
   private readonly base: URL;
-  constructor(endpoint = '/', private readonly transport: typeof fetch = globalThis.fetch) {
+  constructor(endpoint = '/', private readonly transport: typeof fetch = globalThis.fetch, private readonly csrfToken = '') {
     const fallback = typeof location === 'undefined' ? 'http://localhost/' : location.href;
     this.base = new URL(endpoint.endsWith('/') ? endpoint : endpoint + '/', fallback);
     if (!['http:', 'https:'].includes(this.base.protocol) || this.base.username || this.base.password || this.base.search || this.base.hash) throw new CaptchaError('invalid_endpoint');
@@ -36,8 +46,11 @@ export class CaptchaClient {
     if (signal?.aborted) controller.abort();
     const timer = setTimeout(abort, 15_000);
     try {
-      // Native browser fetch rejects a CaptchaClient receiver (Illegal invocation).
-      const r = await this.transport.call(globalThis, new URL(path, this.base), { method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+      const target = new URL(path, this.base);
+      const headers = { 'Content-Type': 'application/json', ...csrfHeader(target, this.csrfToken) };
+      // `same-origin` lets an embedded Laravel package receive its own session
+      // cookie while still refusing browser credentials on cross-origin calls.
+      const r = await this.transport.call(globalThis, target, { method: 'POST', credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers, body: JSON.stringify(body), signal: controller.signal });
       const text = await r.text();
       if (text.length > 1_000_000) throw new CaptchaError('invalid_response', r.status);
       let data: T & { code?: string };
@@ -48,6 +61,12 @@ export class CaptchaClient {
       if (error instanceof CaptchaError) throw error;
       throw new CaptchaError(controller.signal.aborted ? 'request_cancelled' : 'network_error');
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+  }
+  async createSession(action: string, signal?: AbortSignal): Promise<CaptchaSession> {
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(action)) throw new CaptchaError('invalid_context');
+    const session = await this.post<CaptchaSession>(`session/${encodeURIComponent(action)}`, {}, signal);
+    if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken) || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900_000) throw new CaptchaError('invalid_response');
+    return session;
   }
   async issue(sessionToken: string, signal?: AbortSignal): Promise<Challenge> {
     const challenge = await this.post<Challenge>('v1/challenges', { sessionToken }, signal);

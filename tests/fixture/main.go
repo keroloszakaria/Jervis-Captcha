@@ -44,7 +44,24 @@ func main() {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", httpapi.New(e, assets, true).Handler())
+	api := httpapi.New(e, assets, true).Handler()
+	// Test-only embedded-style route: it proves that the browser package can
+	// bootstrap a session without application-owned glue code. Production
+	// Laravel implements this route inside the Composer package.
+	mux.HandleFunc("POST /jervis-captcha/session/{action}", func(w http.ResponseWriter, r *http.Request) {
+		action := r.PathValue("action")
+		result, err := e.CreateSession(r.Context(), captcha.SessionRequest{
+			SiteKey: "fixture", Action: action, Binding: "managed-browser-binding", Type: "pow",
+		})
+		if err != nil {
+			http.Error(w, "session rejected", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+	mux.Handle("/jervis-captcha/", http.StripPrefix("/jervis-captcha", api))
+	mux.Handle("/", api)
 	mux.HandleFunc("POST /__test/answer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer fixture-oracle-only" {
 			http.Error(w, "denied", 401)

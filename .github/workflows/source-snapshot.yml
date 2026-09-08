@@ -2,7 +2,7 @@ name: Maintainer source snapshot
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/**']
+    branches: ['codex/offline-captcha-engine']
     paths: ['.github/workflows/source-snapshot.yml']
 permissions:
   contents: read

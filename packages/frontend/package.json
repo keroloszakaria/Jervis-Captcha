@@ -1,0 +1,17 @@
+{
+  "name": "@jervis/captcha",
+  "version": "0.2.0-alpha.1",
+  "description": "Framework-neutral offline-first Jervis Captcha web component.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "sideEffects": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/jervis-captcha.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=18" },
+  "publishConfig": { "access": "public" }
+}

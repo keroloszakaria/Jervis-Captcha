@@ -21,10 +21,29 @@ describe('SHA-256 proof of work', () => {
   });
 });
 describe('public browser client', () => {
-  it('preserves reverse-proxy prefixes and never sends credentials', async () => {
+  it('preserves reverse-proxy prefixes and uses same-origin-only browser credentials', async () => {
     const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(challenge)); const client = new CaptchaClient('https://intranet.test/captcha/', mock);
     await client.issue(token); expect(String(mock.mock.calls[0]![0])).toBe('https://intranet.test/captcha/v1/challenges');
-    const init = mock.mock.calls[0]![1] as RequestInit; expect(init.credentials).toBe('omit'); expect(init.redirect).toBe('error'); expect(JSON.stringify(init)).not.toContain('Authorization');
+    const init = mock.mock.calls[0]![1] as RequestInit; expect(init.credentials).toBe('same-origin'); expect(init.redirect).toBe('error'); expect(JSON.stringify(init)).not.toContain('Authorization');
+  });
+  it('creates embedded sessions without exposing policy choices', async () => {
+    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ sessionToken: token, expiresInMs: 300000 }));
+    const client = new CaptchaClient('https://intranet.test/jervis-captcha/', mock);
+    await expect(client.createSession('signup')).resolves.toEqual({ sessionToken: token, expiresInMs: 300000 });
+    expect(String(mock.mock.calls[0]![0])).toBe('https://intranet.test/jervis-captcha/session/signup');
+    expect(JSON.parse(String((mock.mock.calls[0]![1] as RequestInit).body))).toEqual({});
+    await expect(client.createSession('../admin')).rejects.toMatchObject({ code: 'invalid_context' });
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+  it('forwards CSRF only to the current origin', async () => {
+    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ sessionToken: token, expiresInMs: 300000 }));
+    vi.stubGlobal('location', new URL('https://intranet.test/form'));
+    await new CaptchaClient('/jervis-captcha/', mock, 'csrf-value').createSession('signup');
+    expect((mock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ 'X-CSRF-TOKEN': 'csrf-value' });
+    mock.mockClear();
+    await new CaptchaClient('https://other.test/jervis-captcha/', mock, 'csrf-value').createSession('signup');
+    expect((mock.mock.calls[0]![1] as RequestInit).headers).not.toHaveProperty('X-CSRF-TOKEN');
+    vi.unstubAllGlobals();
   });
   it('rejects dangerous endpoint schemes and embedded credentials', () => {
     for (const endpoint of ['javascript:alert(1)', 'https://u:p@intranet.test', 'https://intranet.test/?secret=x']) expect(() => new CaptchaClient(endpoint)).toThrow();
