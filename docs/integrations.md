@@ -6,7 +6,7 @@ The universal contract is a web component plus HTTP. There is no requirement for
 
 The browser package supports two server contracts without changing its challenge UI:
 
-- **Embedded Laravel mode:** set `action` and `endpoint`. The widget creates its own package-managed session; the application does not write session orchestration code.
+- **Embedded Laravel mode:** set `action`. The widget creates its own package-managed same-origin session at `/jervis-captcha/`; set `endpoint` only for a customized Laravel prefix/base path.
 - **Native/universal mode:** the host backend creates a session and assigns `element.sessionToken`; this remains available for non-PHP and centralized deployments.
 
 Supported public properties: `endpoint`, `action`, `csrfToken`, `sessionToken`, `locale` (`en`/`ar`), `theme` (`light`/`dark`/`auto`), `presentation` (`inline`/`checkbox`/`invisible`), `disabled` and `name`. Methods: `start()`, `verify()`, `reset()`, `renew()`; getter: `token`. Events: `jervis-success` (proof), `jervis-error` (code), `jervis-reset`, `jervis-expired`, `jervis-renew`.
@@ -18,22 +18,28 @@ import '@jervis/captcha';
 ```
 
 ```html
-<jervis-captcha action="signup" endpoint="/jervis-captcha/"></jervis-captcha>
+<jervis-captcha action="signup"></jervis-captcha>
 ```
 
 A checkbox starts verification and does not itself pass it. Invisible mode only hides automatic PoW, never a required human challenge or an error. The backend still atomically consumes the final proof.
 
+### Accessible managed challenges
+
+The managed browser contract deliberately does **not** expose a public challenge-type selector. A user can ask the widget for an accessible alternative; the browser sends only `variant: "accessible"`. Laravel selects a concrete challenge from the server-owned `accessibilityTypes` policy. The default embedded policy uses the locally packaged English digit audio challenge.
+
+The session response exposes only `accessibilityAvailable: boolean`; it does not reveal the allowed type list or policy. If accessibility is disabled for an action (`accessibilityTypes: []`), the switch is not rendered and direct accessible-session requests fail closed. Browser requests attempting to provide `type`, `binding`, `policy`, or `isAntiAI` are rejected by the embedded Laravel endpoint.
+
 ## Vue and Nuxt
 
-Configure Vue's `isCustomElement` for `jervis-captcha` and import `@jervis/captcha` in a client-only plugin when using SSR. With embedded Laravel, render the custom element with `action="signup"` and the package endpoint; no Vue composable or application-owned session request is required. Clear any application-cached proof on reset/expiry if you mirror the component value externally.
+Configure Vue's `isCustomElement` for `jervis-captcha` and import `@jervis/captcha` in a client-only plugin when using SSR. With embedded Laravel, render the custom element with `action="signup"`; no Vue composable or application-owned session request is required. Clear any application-cached proof on reset/expiry if you mirror the component value externally.
 
 ## React and Next.js
 
-Use a client component that imports `@jervis/captcha` and renders the custom element. With embedded Laravel, `action` + `endpoint` are sufficient. Native-engine deployments may still set the `sessionToken` property from a trusted server route. Do not put backend secrets in React props or public configuration.
+Use a client component that imports `@jervis/captcha` and renders the custom element. With embedded Laravel, `action` is sufficient on the default package prefix. Native-engine deployments may still set the `sessionToken` property from a trusted server route. Do not put backend secrets in React props or public configuration.
 
 ## Angular
 
-Import/register the package once in the browser and add `CUSTOM_ELEMENTS_SCHEMA`. Embedded Laravel needs only `action` + `endpoint`; the Web Component owns session bootstrap and challenge orchestration. A dedicated `ControlValueAccessor` wrapper is not yet published; the element itself remains form-associated in browsers that support `ElementInternals`.
+Import/register the package once in the browser and add `CUSTOM_ELEMENTS_SCHEMA`. Embedded Laravel needs only `action` on the default package prefix; the Web Component owns session bootstrap and challenge orchestration. A dedicated `ControlValueAccessor` wrapper is not yet published; the element itself remains form-associated in browsers that support `ElementInternals`.
 
 ## HTML, Blade, Razor, Django, Svelte and other web frontends
 
