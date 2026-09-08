@@ -19,6 +19,7 @@ final class JervisCaptchaConsumerTest extends TestCase
         config()->set('jervis-captcha.global_sessions_per_minute', 1000);
         config()->set('jervis-captcha.request_limits', [
             'global_per_minute' => 1000,
+            'session_per_binding_per_minute' => 100,
             'challenge_per_binding_per_minute' => 100,
             'answer_per_binding_per_minute' => 100,
         ]);
@@ -44,7 +45,10 @@ final class JervisCaptchaConsumerTest extends TestCase
     {
         $session = $this->postJson('/jervis-captcha/session/signup', ['variant' => 'standard'])
             ->assertOk()
-            ->assertJson(['accessibilityAvailable' => true])
+            ->assertJson([
+                'accessibilityAvailable' => true,
+                'fieldName' => 'jervisCaptchaToken',
+            ])
             ->json();
 
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $session['sessionToken']);
