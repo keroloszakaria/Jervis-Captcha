@@ -50,6 +50,24 @@ test('managed frontend package defaults to the embedded Laravel endpoint and ren
   await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
 });
 
+test('managed widget switches to a server-approved accessible audio challenge', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const element = document.createElement('jervis-captcha') as any;
+    element.id = 'accessible-captcha'; element.action = 'accessible-demo';
+    document.body.append(element);
+  });
+  await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
+  await expect(page.locator('#accessible-captcha audio')).toHaveCount(0);
+  const accessible = page.getByRole('button', { name: 'Use an accessible challenge', exact: true });
+  await expect(accessible).toBeVisible();
+  await accessible.click();
+  await expect(page.locator('#accessible-captcha audio')).toBeVisible();
+  await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
+  await expect(accessible).toHaveCount(0);
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
+});
+
 test('bounded work runs offline and consumes a proof', async ({ page }) => {
   await page.goto('/'); await page.locator('#presentation').selectOption('invisible'); await page.locator('#kind').selectOption('pow');
   await expect(page.getByRole('button', { name: 'Submit protected action' })).toBeEnabled();
