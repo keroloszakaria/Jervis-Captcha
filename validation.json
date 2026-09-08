@@ -1,0 +1,88 @@
+{
+  "sourceCommit": "916590918ea8af11dfdd607e1d45d92883ac6634",
+  "runId": "34173285381",
+  "go": {
+    "executed": true,
+    "passedTopLevelTests": 32,
+    "passedTestsIncludingSubtests": 61,
+    "failedTestsIncludingSubtests": 0,
+    "failedPackages": [],
+    "buildFailures": [],
+    "raceDetector": true
+  },
+  "web": {
+    "executed": true,
+    "numPassedTests": 13,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  },
+  "browser": {
+    "executed": true,
+    "startTime": "2026-09-08T00:29:31.953Z",
+    "duration": 52134.4,
+    "expected": 42,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "sdk": {
+    "executed": true,
+    "passed": true,
+    "engine": "production SQLite executable",
+    "consumers": {
+      "node": {
+        "passed": true,
+        "checks": [
+          "create session",
+          "reject wrong binding",
+          "consume proof",
+          "reject replay",
+          "reject malformed or wrong-action responses",
+          "reject redirects without forwarding credentials"
+        ]
+      },
+      "php": {
+        "passed": true,
+        "checks": [
+          "create session",
+          "reject wrong binding",
+          "consume proof",
+          "reject replay",
+          "reject malformed or wrong-action responses",
+          "reject redirects without forwarding credentials"
+        ]
+      },
+      "python": {
+        "passed": true,
+        "checks": [
+          "create session",
+          "reject wrong binding",
+          "consume proof",
+          "reject replay",
+          "reject malformed or wrong-action responses",
+          "reject redirects without forwarding credentials"
+        ]
+      },
+      "dotnet": {
+        "passed": true,
+        "checks": [
+          "create session",
+          "reject wrong binding",
+          "consume proof",
+          "reject replay",
+          "reject malformed or wrong-action responses",
+          "reject redirects without forwarding credentials"
+        ]
+      }
+    }
+  },
+  "npmAudit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  }
+}
