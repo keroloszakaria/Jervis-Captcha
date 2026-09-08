@@ -1,6 +1,6 @@
 export const messages = {
   en: {
-    title: 'Verify your request', subtitle: 'Private verification · runs locally', start: 'Start verification', retry: 'Start a new verification', verify: 'Verify', refresh: 'New challenge',
+    title: 'Verify your request', subtitle: 'Private verification · runs locally', start: 'Start verification', retry: 'Start a new verification', verify: 'Verify', refresh: 'New challenge', accessible: 'Use an accessible challenge',
     answer: 'Your answer', loading: 'Preparing your challenge…', verifying: 'Checking securely…', success: 'Verified', expired: 'Verification expired. Start a new session.',
     idle: 'Waiting for a verification session.', ready: 'Complete the challenge below.', local: 'No external services', work: 'Preparing a local security check…',
     text: 'Enter the characters shown in the image.', slider: 'Move the piece into the matching cutout.', drag: 'Move the piece horizontally and vertically into the cutout.',
@@ -9,12 +9,12 @@ export const messages = {
     horizontal: 'Horizontal position', vertical: 'Vertical position', angle: 'Rotation angle', clear: 'Clear selection', required: 'Complete verification before submitting.',
     incorrect_answer: 'That did not match. Try again; attempts are limited.', too_early: 'Please wait a moment before verifying.',
     network_error: 'Cannot reach the verification endpoint.', rate_limited: 'Too many requests. Try again later.',
-    session_locked: 'Attempt limit reached. Request a new session.', challenge_expired: 'This challenge expired. Request a new one.',
+    session_locked: 'Attempt limit reached. Request a new session.', challenge_expired: 'This challenge expired. Request a new one.', accessibility_unavailable: 'An accessible challenge is not available for this action.',
     work_timeout: 'The local check reached its device budget. Try again or use your application’s alternative verification route.',
     error: 'Verification could not complete. Request a new session or contact your administrator.',
   },
   ar: {
-    title: 'تحقّق من الطلب', subtitle: 'تحقّق خاص يعمل محليًا', start: 'ابدأ التحقّق', retry: 'ابدأ تحقّقًا جديدًا', verify: 'تحقّق', refresh: 'تحدٍّ جديد',
+    title: 'تحقّق من الطلب', subtitle: 'تحقّق خاص يعمل محليًا', start: 'ابدأ التحقّق', retry: 'ابدأ تحقّقًا جديدًا', verify: 'تحقّق', refresh: 'تحدٍّ جديد', accessible: 'استخدم تحديًا ميسّرًا',
     answer: 'الإجابة', loading: 'جارٍ تجهيز التحدّي…', verifying: 'جارٍ التحقّق…', success: 'تم التحقّق', expired: 'انتهت صلاحية التحقّق. ابدأ جلسة جديدة.',
     idle: 'في انتظار جلسة التحقّق.', ready: 'أكمل التحدّي التالي.', local: 'بدون خدمات خارجية', work: 'جارٍ تجهيز فحص أمان محلي…',
     text: 'اكتب الحروف والأرقام الظاهرة في الصورة.', slider: 'حرّك القطعة إلى المكان الناقص.', drag: 'حرّك القطعة أفقيًا ورأسيًا إلى المكان الناقص.',
@@ -23,7 +23,7 @@ export const messages = {
     horizontal: 'الموضع الأفقي', vertical: 'الموضع الرأسي', angle: 'زاوية الدوران', clear: 'مسح الاختيارات', required: 'أكمل التحقّق قبل الإرسال.',
     incorrect_answer: 'الإجابة غير مطابقة. حاول مجددًا؛ عدد المحاولات محدود.', too_early: 'انتظر قليلًا قبل التحقّق.',
     network_error: 'تعذّر الوصول إلى مسار التحقّق.', rate_limited: 'طلبات كثيرة. حاول لاحقًا.',
-    session_locked: 'وصلت إلى حد المحاولات. اطلب جلسة جديدة.', challenge_expired: 'انتهت صلاحية التحدّي. اطلب تحدّيًا جديدًا.',
+    session_locked: 'وصلت إلى حد المحاولات. اطلب جلسة جديدة.', challenge_expired: 'انتهت صلاحية التحدّي. اطلب تحدّيًا جديدًا.', accessibility_unavailable: 'لا يوجد تحدٍ ميسّر متاح لهذا الإجراء.',
     work_timeout: 'وصل الفحص إلى الحد المسموح لموارد الجهاز. أعد المحاولة أو استخدم مسار التحقّق البديل في التطبيق.',
     error: 'تعذّر إكمال التحقّق. اطلب جلسة جديدة أو تواصل مع المسؤول.',
   },
