@@ -6,6 +6,7 @@ return [
     'secret'=>env('JERVIS_CAPTCHA_SECRET',env('APP_KEY')),
     'store'=>env('JERVIS_CAPTCHA_STORE'),
     'cache_prefix'=>'jervis-captcha:',
+    'field_name'=>env('JERVIS_CAPTCHA_FIELD_NAME','jervisCaptchaToken'),
     'binding_resolver'=>LaravelSessionBinding::class,
     'global_sessions_per_minute'=>(int)env('JERVIS_CAPTCHA_GLOBAL_SESSIONS_PER_MINUTE',300),
     // These budgets are deliberately action-independent so callers cannot evade
@@ -26,7 +27,7 @@ return [
         'challengeTtlSeconds'=>120,'proofTtlSeconds'=>60,'maxAttempts'=>3,
         'maxRefreshes'=>4,'sessionsPerMinute'=>120,
     ],
-    // Optional per-action overrides. The browser can name an action but can never
-    // choose its policy; unknown valid actions use the server-owned default above.
+    // Optional per-action overrides are merged over the server-owned default.
+    // Set default_policy to null to switch to an explicit action allowlist only.
     'actions'=>[],
 ];
