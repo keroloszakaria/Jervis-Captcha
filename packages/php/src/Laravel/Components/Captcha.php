@@ -5,7 +5,7 @@ namespace Jervis\Captcha\Laravel\Components;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\View\Component;
-use InvalidArgumentException;
+use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
 
 final class Captcha extends Component
 {
@@ -17,11 +17,7 @@ final class Captcha extends Component
         public string $theme = 'auto',
         public string $presentation = 'inline',
     ) {
-        $field = (string) config('jervis-captcha.field_name', 'jervisCaptchaToken');
-        if (preg_match('/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/D', $field) !== 1) {
-            throw new InvalidArgumentException('Invalid Jervis Captcha field_name configuration');
-        }
-        $this->name = $field;
+        $this->name = EmbeddedConfig::fieldName();
     }
 
     public function render(): View
