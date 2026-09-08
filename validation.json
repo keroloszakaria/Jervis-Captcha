@@ -1,10 +1,10 @@
 {
-  "sourceCommit": "916590918ea8af11dfdd607e1d45d92883ac6634",
-  "runId": "34173285381",
+  "sourceCommit": "87d83ed51e3f5898ee20e0cbc9ca81126d2738f7",
+  "runId": "34174003856",
   "go": {
     "executed": true,
-    "passedTopLevelTests": 32,
-    "passedTestsIncludingSubtests": 61,
+    "passedTopLevelTests": 34,
+    "passedTestsIncludingSubtests": 67,
     "failedTestsIncludingSubtests": 0,
     "failedPackages": [],
     "buildFailures": [],
@@ -19,8 +19,8 @@
   },
   "browser": {
     "executed": true,
-    "startTime": "2026-09-08T00:29:31.953Z",
-    "duration": 52134.4,
+    "startTime": "2026-09-08T00:42:26.737Z",
+    "duration": 59766.439,
     "expected": 42,
     "skipped": 0,
     "unexpected": 0,
