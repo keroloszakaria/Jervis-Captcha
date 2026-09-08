@@ -21,6 +21,7 @@ final class ChallengeGenerator
             'drag' => $this->slider(true),
             'rotate' => $this->rotate(),
             'click' => $this->click(),
+            'audio' => $this->audio(),
             'math' => $this->math(),
             'logic' => $this->logic(),
             'pow' => [[
@@ -197,6 +198,18 @@ final class ChallengeGenerator
             $points[] = $candidate;
         }
         return $points;
+    }
+
+    private function audio(): array
+    {
+        $answer = '';
+        for ($i = 0; $i < 5; $i++) $answer .= (string) random_int(0, 9);
+        return [[
+            'id' => self::token(),
+            'type' => 'audio',
+            'prompt' => 'Enter the five digits spoken in English',
+            'audio' => (new AudioGenerator())->render($answer),
+        ], ['text' => $answer]];
     }
 
     private function math(): array
