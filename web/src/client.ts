@@ -36,7 +36,8 @@ export class CaptchaClient {
     if (signal?.aborted) controller.abort();
     const timer = setTimeout(abort, 15_000);
     try {
-      const r = await this.transport(new URL(path, this.base), { method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+      // Native browser fetch rejects a CaptchaClient receiver (Illegal invocation).
+      const r = await this.transport.call(globalThis, new URL(path, this.base), { method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
       const text = await r.text();
       if (text.length > 1_000_000) throw new CaptchaError('invalid_response', r.status);
       let data: T & { code?: string };
