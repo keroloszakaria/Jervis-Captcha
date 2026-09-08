@@ -41,7 +41,11 @@ final class EmbeddedConfig
             }
             $result[] = $middleware;
         }
-        return array_values(array_unique($result));
+        $result = array_values(array_unique($result));
+        if (!in_array('web', $result, true)) {
+            throw new InvalidArgumentException('Embedded managed CAPTCHA routes require Laravel web middleware for session and CSRF protection');
+        }
+        return $result;
     }
 
     public static function validFieldName(): bool
