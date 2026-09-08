@@ -5,7 +5,7 @@ import gzip
 import hashlib
 import io
 import json
-import os
+import re
 import tarfile
 import zipfile
 from pathlib import Path
@@ -38,16 +38,29 @@ def iter_files(base: Path, roots: list[str]) -> list[Path]:
     return sorted(found, key=lambda p: p.relative_to(base).as_posix())
 
 
-def zip_php(version: str) -> Path:
+def engine_version() -> str:
+    source = (PHP / 'src' / 'Engine' / 'EmbeddedEngine.php').read_text(encoding='utf-8')
+    match = re.search(r"public\s+const\s+VERSION\s*=\s*'([^']+)'\s*;", source)
+    if not match:
+        raise SystemExit('could not resolve EmbeddedEngine::VERSION')
+    return match.group(1)
+
+
+def zip_php(version: str, source_manifest: dict) -> Path:
     target = OUT / f'jervis-captcha-php-{version}.zip'
     files = iter_files(PHP, ['composer.json', 'README.md', 'src', 'config', 'resources'])
+    artifact_manifest = dict(source_manifest)
+    artifact_manifest['version'] = version
+    composer_bytes = (json.dumps(artifact_manifest, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+
     with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in files:
             relative = path.relative_to(PHP).as_posix()
             info = zipfile.ZipInfo(relative, date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
-            archive.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+            data = composer_bytes if relative == 'composer.json' else path.read_bytes()
+            archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
     return target
 
 
@@ -83,10 +96,12 @@ def sha256(path: Path) -> str:
 def main() -> None:
     php_manifest = load_json(PHP / 'composer.json')
     frontend_manifest = load_json(FRONTEND / 'package.json')
-    php_version = str(php_manifest.get('version', ''))
     frontend_version = str(frontend_manifest.get('version', ''))
-    if not php_version or php_version != frontend_version:
-        raise SystemExit(f'embedded package versions must match: php={php_version!r}, frontend={frontend_version!r}')
+    runtime_version = engine_version()
+    if not frontend_version or runtime_version != frontend_version:
+        raise SystemExit(f'embedded package versions must match: engine={runtime_version!r}, frontend={frontend_version!r}')
+    if 'version' in php_manifest:
+        raise SystemExit('packages/php/composer.json must not declare a VCS version; the artifact builder injects it')
 
     for required in [
         PHP / 'resources' / 'dist' / 'jervis-captcha.js',
@@ -100,14 +115,14 @@ def main() -> None:
         if stale.is_file():
             stale.unlink()
 
-    php_archive = zip_php(php_version)
+    php_archive = zip_php(runtime_version, php_manifest)
     frontend_archive = tar_frontend(frontend_version)
     archives = [php_archive, frontend_archive]
 
     checksums = '\n'.join(f'{sha256(path)}  {path.name}' for path in archives) + '\n'
     (OUT / 'SHA256SUMS').write_text(checksums, encoding='utf-8', newline='\n')
     manifest = {
-        'version': php_version,
+        'version': runtime_version,
         'mode': 'embedded-php',
         'runtimeNetworkDependency': False,
         'php': {
