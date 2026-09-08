@@ -6,6 +6,7 @@ import {
 } from './jervis-captcha-base.js';
 
 const ACTION = /^[A-Za-z0-9._-]{1,64}$/;
+const FIELD = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const VARIANTS = new Set(['standard', 'accessible']);
 const csrfByOrigin = new Map();
 const managed = new WeakMap();
@@ -43,6 +44,8 @@ BaseCaptchaClient.prototype.post = async function (path, body, signal) {
       body: JSON.stringify(body),
       signal: controller.signal,
     });
+    const length = Number(response.headers.get('content-length') || '0');
+    if (Number.isFinite(length) && length > 1000000) throw new CaptchaError('invalid_response', response.status);
     const text = await response.text();
     if (text.length > 1000000) throw new CaptchaError('invalid_response', response.status);
     let data;
@@ -64,7 +67,7 @@ BaseCaptchaClient.prototype.createSession = async function (action, variant = 's
   const session = await this.post(`session/${encodeURIComponent(action)}`, { variant }, signal);
   if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken)
     || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900000
-    || typeof session.accessibilityAvailable !== 'boolean') {
+    || typeof session.accessibilityAvailable !== 'boolean' || typeof session.fieldName !== 'string' || !FIELD.test(session.fieldName)) {
     throw new CaptchaError('invalid_response');
   }
   return session;
@@ -163,6 +166,7 @@ async function bootstrap(element, force = false, requestedVariant) {
     if (!element.isConnected || managed.get(element)?.generation !== generation) return;
     state.token = session.sessionToken;
     state.accessibilityAvailable = session.accessibilityAvailable;
+    element.name = session.fieldName;
     element.sessionToken = session.sessionToken;
     void watchShadow(element);
   } catch (error) {
