@@ -6,6 +6,7 @@ namespace Jervis\Captcha\Laravel\Commands;
 use Illuminate\Console\Command;
 use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Engine\EmbeddedEngine;
+use Jervis\Captcha\Laravel\Support\RequestLimiter;
 
 final class DoctorCommand extends Command
 {
@@ -40,6 +41,7 @@ final class DoctorCommand extends Command
             'secure random' => function_exists('random_bytes'),
             'secret >= 32 bytes' => strlen($secret) >= 32,
             'engine configuration' => $engineReady,
+            'request budgets' => RequestLimiter::configurationValid(),
             'persistent cache + lock' => $cacheReady,
             'browser asset' => is_file($asset) && filesize($asset) > 1000,
         ];
@@ -51,6 +53,9 @@ final class DoctorCommand extends Command
 
         if (!$cacheReady) {
             $this->warn('Use a persistent Laravel cache store with atomic locks. The array/null stores are not valid CAPTCHA state stores.');
+        }
+        if (!RequestLimiter::configurationValid()) {
+            $this->warn('Request budgets must be integers between 1 and 100000 requests per minute.');
         }
 
         return in_array(false, $checks, true) ? self::FAILURE : self::SUCCESS;
