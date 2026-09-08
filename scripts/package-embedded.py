@@ -25,6 +25,20 @@ def require_file(path: Path) -> None:
         raise SystemExit(f'missing required package file: {path.relative_to(ROOT)}')
 
 
+def require_exact_files(directory: Path, expected: set[str]) -> None:
+    if not directory.is_dir():
+        raise SystemExit(f'missing package directory: {directory.relative_to(ROOT)}')
+    actual = {path.name for path in directory.iterdir() if path.is_file()}
+    nested = [path for path in directory.iterdir() if path.is_dir()]
+    if actual != expected or nested:
+        extra = sorted(actual - expected)
+        missing = sorted(expected - actual)
+        raise SystemExit(
+            f'unexpected runtime package contents in {directory.relative_to(ROOT)}: '
+            f'missing={missing}, extra={extra}, nested={[p.name for p in nested]}'
+        )
+
+
 def iter_files(base: Path, roots: list[str]) -> list[Path]:
     found: list[Path] = []
     for item in roots:
@@ -103,8 +117,17 @@ def main() -> None:
     if 'version' in php_manifest:
         raise SystemExit('packages/php/composer.json must not declare a VCS version; the artifact builder injects it')
 
+    require_exact_files(
+        PHP / 'resources' / 'dist',
+        {'jervis-captcha.js', 'THIRD_PARTY_NOTICES.txt'},
+    )
+    require_exact_files(
+        FRONTEND / 'dist',
+        {'jervis-captcha.js', 'index.d.ts', 'THIRD_PARTY_NOTICES.txt'},
+    )
     for required in [
         PHP / 'resources' / 'dist' / 'jervis-captcha.js',
+        PHP / 'resources' / 'audio' / 'digits.asset',
         FRONTEND / 'dist' / 'jervis-captcha.js',
         FRONTEND / 'dist' / 'index.d.ts',
     ]:
