@@ -6,6 +6,7 @@ namespace Jervis\Captcha\Laravel\Commands;
 use Illuminate\Console\Command;
 use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Engine\EmbeddedEngine;
+use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
 use Jervis\Captcha\Laravel\Support\RequestLimiter;
 
 final class DoctorCommand extends Command
@@ -19,8 +20,9 @@ final class DoctorCommand extends Command
         $audioAsset = dirname(__DIR__, 3) . '/resources/audio/digits.asset';
         $cacheStore = (string) (config('jervis-captcha.store') ?: config('cache.default', ''));
         $secret = (string) config('jervis-captcha.secret', '');
-        $fieldName = (string) config('jervis-captcha.field_name', 'jervisCaptchaToken');
-        $fieldNameReady = preg_match('/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/D', $fieldName) === 1;
+        $fieldNameReady = EmbeddedConfig::validFieldName();
+        $routesEnabled = (bool) config('jervis-captcha.routes.enabled', true);
+        $routesReady = !$routesEnabled || EmbeddedConfig::validRouteConfiguration();
 
         $engineReady = false;
         try {
@@ -45,6 +47,7 @@ final class DoctorCommand extends Command
             'secure random' => function_exists('random_bytes'),
             'secret >= 32 bytes' => strlen($secret) >= 32,
             'proof field name' => $fieldNameReady,
+            'route configuration' => $routesReady,
             'engine configuration' => $engineReady,
             'request budgets' => RequestLimiter::configurationValid(),
             'persistent cache + lock' => $cacheReady,
@@ -56,10 +59,14 @@ final class DoctorCommand extends Command
             $this->line(sprintf('%-26s %s', $label, $ok ? 'OK' : 'FAIL'));
         }
         $this->line(sprintf('%-26s %s', 'cache store', $cacheStore !== '' ? $cacheStore : '(not configured)'));
-        $this->line(sprintf('%-26s %s', 'proof field', $fieldNameReady ? $fieldName : '(invalid)'));
+        $this->line(sprintf('%-26s %s', 'proof field', $fieldNameReady ? EmbeddedConfig::fieldName() : '(invalid)'));
+        $this->line(sprintf('%-26s %s', 'package routes', $routesEnabled ? ($routesReady ? EmbeddedConfig::routePrefix() : '(invalid)') : 'disabled'));
 
         if (!$fieldNameReady) {
             $this->warn('JERVIS_CAPTCHA_FIELD_NAME must start with a letter/underscore and contain only letters, numbers, underscore or hyphen (max 64 chars).');
+        }
+        if (!$routesReady) {
+            $this->warn('Jervis Captcha route prefix/middleware configuration is invalid. Do not use an empty/root prefix.');
         }
         if (!$cacheReady) {
             $this->warn('Use a persistent Laravel cache store with atomic locks. The array/null stores are not valid CAPTCHA state stores.');
