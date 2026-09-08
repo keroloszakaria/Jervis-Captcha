@@ -72,4 +72,18 @@ final class MiddlewareFailureTest extends TestCase
             ->assertStatus(503)
             ->assertJsonPath('errors.jervisCaptchaToken.0', 'CAPTCHA verification is temporarily unavailable.');
     }
+
+    public function testMalformedTrustedBindingIsUnavailableNotAUserValidationError(): void
+    {
+        $this->app->instance(BindingResolver::class, new class implements BindingResolver {
+            public function resolve(Request $request): string
+            {
+                return 'short';
+            }
+        });
+
+        $this->postJson('/protected-failure-test', ['jervisCaptchaToken' => str_repeat('a', 64) . '.' . str_repeat('b', 43)])
+            ->assertStatus(503)
+            ->assertJsonPath('errors.jervisCaptchaToken.0', 'CAPTCHA verification is temporarily unavailable.');
+    }
 }
