@@ -64,9 +64,6 @@ final class LaravelCacheStore implements Store
                     $remaining = max(1, (int) ceil((((int) ($next['expiresMs'] ?? 0)) - (int) floor(microtime(true) * 1000)) / 1000));
                     $this->putOrFail($repo, $key, $next, min($ttlSeconds, $remaining));
                 }
-                // Persist failed-attempt state before surfacing its error. This is
-                // intentionally not retried: proof consumption/state transitions
-                // must remain exactly-once under the cache lock.
                 if (isset($result['error']) && $result['error'] instanceof \Throwable) throw $result['error'];
                 return $result['result'] ?? null;
             });
@@ -95,9 +92,10 @@ final class LaravelCacheStore implements Store
     {
         $repo = $this->repository();
         $key = $this->key('doctor:' . bin2hex(random_bytes(8)));
-        $lock = $repo->lock($key . ':lock', self::LOCK_SECONDS);
+        $lock = null;
         $acquired = false;
         try {
+            $lock = $repo->lock($key . ':lock', self::LOCK_SECONDS);
             $acquired = $lock->get();
             if (!$acquired) return false;
             if ($repo->put($key, 'ok', 5) !== true) return false;
@@ -105,7 +103,7 @@ final class LaravelCacheStore implements Store
         } catch (\Throwable) {
             return false;
         } finally {
-            if ($acquired) {
+            if ($acquired && $lock !== null) {
                 try { $lock->release(); } catch (\Throwable) {}
             }
             try { $repo->forget($key); } catch (\Throwable) {}
