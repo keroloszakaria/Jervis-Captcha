@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -147,6 +148,32 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// Read the bounded body before routing/policy rejections. With Connection: close,
+		// unread request bytes can cause Windows to reset the socket before the
+		// peer receives a 4xx response. Admission stays ahead of body reads so a
+		// slow sender cannot bypass the eight-request concurrency budget.
+		select {
+		case s.work <- struct{}{}:
+			defer func() { <-s.work }()
+		default:
+			write(w, 503, map[string]string{"code": "busy"})
+			return
+		}
+		if r.Body != nil {
+			original := r.Body
+			defer original.Close()
+			body, err := io.ReadAll(http.MaxBytesReader(w, original, 8192))
+			if err != nil {
+				var tooLarge *http.MaxBytesError
+				if errors.As(err, &tooLarge) {
+					write(w, 413, map[string]string{"code": "request_too_large"})
+				} else {
+					write(w, 400, map[string]string{"code": "invalid_request"})
+				}
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
 		if len(r.URL.RawQuery) > 0 && strings.HasPrefix(r.URL.Path, "/v1/") {
 			write(w, 400, map[string]string{"code": "query_not_allowed"})
 			return
@@ -166,13 +193,6 @@ func (s *Server) Handler() http.Handler {
 				w.WriteHeader(204)
 				return
 			}
-		}
-		select {
-		case s.work <- struct{}{}:
-			defer func() { <-s.work }()
-		default:
-			write(w, 503, map[string]string{"code": "busy"})
-			return
 		}
 		mux.ServeHTTP(w, r)
 	})

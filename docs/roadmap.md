@@ -9,13 +9,14 @@ This document separates implemented capabilities from release assurance. `valida
 - [x] Text, slider, free drag, rotation, ordered click, English audio, math, logic and PoW generators/verifiers.
 - [x] Backend-owned antiAI profile with bounded PoW and experimental raster noise; no AI-proof claim.
 - [x] Arabic/English web UI, RTL, themes, keyboard controls, cancellation, expiry and native form association.
-- [x] Generic API, server clients for Node/PHP/Python/.NET, and framework integration recipes.
+- [x] Generic API, server clients for Node/PHP/Python/.NET, framework integration recipes and compiled cross-runtime consumer fixtures.
 - [x] Native build/packaging workflow, checksum manifest, dependency inventory and local notices.
-- [x] Tests for replay, concurrent state transitions, wrong contexts, expiry, refresh budgets, origin checks, malformed inputs, offline browser requests and real widget-to-engine integration.
+- [x] Tests for replay, concurrent state transitions, wrong contexts, expiry, refresh budgets, origin checks, malformed inputs, offline browser requests and real widget-to-engine integration across Chromium, Firefox and WebKit.
+- [x] Native Windows/Linux/macOS acceptance jobs and a loopback-only Linux network namespace gate. Execution results are recorded by CI; configuring a job alone is not a pass.
 
 ## Must be verified before a customer production rollout
 
-- [ ] Successful **full** CI for the exact source commit (SQLite, Lit build, real browsers, .NET and native compile). Local dependency-free tests alone do not satisfy this gate.
+- [ ] Verify successful **full** CI for the exact customer source commit (SQLite, Lit build, real browsers, .NET and native compile). Local dependency-free tests alone do not satisfy this gate.
 - [ ] Customer-native Windows/macOS/Linux runtime acceptance and first-boot packet capture with Internet blocked.
 - [ ] Customer reverse-proxy/TLS/ACL, OS data permissions, secret provisioning and rollback recovery checks.
 - [ ] Independent security review, solver/adversarial benchmark, load/resource-exhaustion test and human usability/accessibility assessment.
@@ -32,4 +33,4 @@ This document separates implemented capabilities from release assurance. `valida
 
 ## Next implementation order
 
-First close customer release-assurance gates and use measured usability/attack results to tune policy. Then add compiled consumer fixtures and thin framework wrappers. Introduce shared-state deployment only when an actual multi-node requirement exists. Add optional WebAuthn as a separately reviewed account step-up mechanism rather than pretending it is anonymous human detection. Keep camera-based liveness outside the core CAPTCHA package.
+First close customer release-assurance gates and use measured usability/attack results to tune policy. Then add thin framework wrappers with real host-framework acceptance fixtures. Introduce shared-state deployment only when an actual multi-node requirement exists. Add optional WebAuthn as a separately reviewed account step-up mechanism rather than pretending it is anonymous human detection. Keep camera-based liveness outside the core CAPTCHA package.
