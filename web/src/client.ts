@@ -24,10 +24,11 @@ function validInteger(value: unknown, min: number, max: number): value is number
 function validWork(work: Work | undefined): boolean {
   return work === undefined || (tokenPattern.test(work.seed) && Number.isInteger(work.bits) && work.bits >= 1 && work.bits <= 20);
 }
-function validGeometry(c: Challenge, pieceRequired: boolean): boolean {
+function validGeometry(c: Challenge, pieceRequired: boolean, pieceTopRequired = false): boolean {
   if (!validInteger(c.width, 80, 1000) || !validInteger(c.height, 60, 1000)) return false;
   if (!pieceRequired) return true;
   if (!validInteger(c.pieceSize, 8, Math.min(c.width!, c.height!))) return false;
+  if (c.pieceTop === undefined) return !pieceTopRequired;
   return validInteger(c.pieceTop, 0, c.height! - c.pieceSize!);
 }
 function validChallenge(c: Challenge): boolean {
@@ -45,10 +46,13 @@ function validChallenge(c: Challenge): boolean {
     case 'rotate':
       return typeof c.image === 'string' && imagePattern.test(c.image) && c.piece === undefined && c.audio === undefined;
     case 'slider':
+      return typeof c.image === 'string' && imagePattern.test(c.image)
+        && typeof c.piece === 'string' && imagePattern.test(c.piece)
+        && c.audio === undefined && validGeometry(c, true, true);
     case 'drag':
       return typeof c.image === 'string' && imagePattern.test(c.image)
         && typeof c.piece === 'string' && imagePattern.test(c.piece)
-        && c.audio === undefined && validGeometry(c, true);
+        && c.audio === undefined && validGeometry(c, true, false);
     case 'click':
       return typeof c.image === 'string' && imagePattern.test(c.image)
         && c.piece === undefined && c.audio === undefined && validGeometry(c, false);
