@@ -9,6 +9,7 @@ use Illuminate\Routing\Controller;
 use Jervis\Captcha\CaptchaException;
 use Jervis\Captcha\Contracts\BindingResolver;
 use Jervis\Captcha\Engine\EmbeddedEngine;
+use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
 use Jervis\Captcha\Laravel\Support\RequestLimiter;
 
 final class CaptchaController extends Controller
@@ -23,11 +24,15 @@ final class CaptchaController extends Controller
             'binding' => ['prohibited'],
             'isAntiAI' => ['prohibited'],
         ]);
-        return $this->run(fn () => $engine->createSession(
-            $action,
-            $binding->resolve($request),
-            (string) $request->input('variant', 'standard'),
-        ));
+        return $this->run(function () use ($request, $action, $engine, $binding): array {
+            $result = $engine->createSession(
+                $action,
+                $binding->resolve($request),
+                (string) $request->input('variant', 'standard'),
+            );
+            $result['fieldName'] = EmbeddedConfig::fieldName();
+            return $result;
+        });
     }
 
     public function challenge(Request $request, EmbeddedEngine $engine, BindingResolver $binding, RequestLimiter $limiter): JsonResponse
