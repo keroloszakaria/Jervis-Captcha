@@ -188,10 +188,11 @@ final class ChallengeGenerator
                 if ($farEnough) { $candidate = $next; break; }
             }
             if ($candidate === null) {
-                // Deterministic fallback keeps the challenge usable even if the
-                // random sampler repeatedly lands too close to existing targets.
-                $fallback = [[55, 45], [150, 115], [245, 45]][$index];
-                $candidate = ['x' => $fallback[0], 'y' => $fallback[1]];
+                return [
+                    ['x' => 55, 'y' => 45],
+                    ['x' => 150, 'y' => 115],
+                    ['x' => 245, 'y' => 45],
+                ];
             }
             $points[] = $candidate;
         }
