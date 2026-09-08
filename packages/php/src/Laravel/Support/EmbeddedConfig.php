@@ -19,8 +19,10 @@ final class EmbeddedConfig
     public static function routePrefix(): string
     {
         $value = trim((string) config('jervis-captcha.routes.prefix', 'jervis-captcha'), '/');
+        $segments = $value === '' ? [] : explode('/', $value);
         if ($value === '' || strlen($value) > 128
-            || preg_match('/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/D', $value) !== 1) {
+            || preg_match('/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/D', $value) !== 1
+            || array_intersect($segments, ['.', '..']) !== []) {
             throw new InvalidArgumentException('Invalid Jervis Captcha route prefix configuration');
         }
         return $value;
