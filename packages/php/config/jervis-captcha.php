@@ -14,6 +14,7 @@ return [
     // separately by the verification engine policy.
     'request_limits'=>[
         'global_per_minute'=>(int)env('JERVIS_CAPTCHA_GLOBAL_REQUESTS_PER_MINUTE',5000),
+        'session_per_binding_per_minute'=>(int)env('JERVIS_CAPTCHA_SESSIONS_PER_BINDING_PER_MINUTE',30),
         'challenge_per_binding_per_minute'=>(int)env('JERVIS_CAPTCHA_CHALLENGES_PER_BINDING_PER_MINUTE',30),
         'answer_per_binding_per_minute'=>(int)env('JERVIS_CAPTCHA_ANSWERS_PER_BINDING_PER_MINUTE',60),
     ],
