@@ -59,7 +59,7 @@ final class AudioGenerator
 
         $compressed = base64_decode($match[1], true);
         if (!is_string($compressed)) throw new CaptchaException('audio_asset_invalid', 500);
-        $json = gzdecode($compressed, 300000);
+        $json = @gzdecode($compressed, 300000);
         if (!is_string($json)) throw new CaptchaException('audio_asset_invalid', 500);
         try {
             $decoded = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
