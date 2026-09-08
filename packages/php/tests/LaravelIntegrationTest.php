@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Blade;
 use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Laravel\JervisCaptchaServiceProvider;
 use Jervis\Captcha\Laravel\Support\RequestLimiter;
+use Jervis\Captcha\Tests\Support\FixedBindingResolver;
 use Orchestra\Testbench\TestCase;
 
 final class LaravelIntegrationTest extends TestCase
@@ -23,6 +24,7 @@ final class LaravelIntegrationTest extends TestCase
         $app['config']->set('session.driver', 'array');
         $app['config']->set('jervis-captcha.secret', str_repeat('s', 40));
         $app['config']->set('jervis-captcha.store', 'array');
+        $app['config']->set('jervis-captcha.binding_resolver', FixedBindingResolver::class);
         $app['config']->set('jervis-captcha.request_limits', [
             'global_per_minute' => 1000,
             'challenge_per_binding_per_minute' => 100,
@@ -166,7 +168,7 @@ final class LaravelIntegrationTest extends TestCase
 
     public function testInvalidRequestBudgetFailsClosed(): void
     {
-        $this->app['config']->set('jervis-captcha.request_limits.global_per_minute', 0);
+        $this->app['config']->set('jervis-captcha.request_limits.challenge_per_binding_per_minute', 0);
         self::assertFalse(RequestLimiter::configurationValid());
 
         $session = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json('sessionToken');
@@ -191,7 +193,8 @@ final class LaravelIntegrationTest extends TestCase
 
     public function testPackageServesOnlyItsBrowserRuntimeModules(): void
     {
-        $entry = $this->get('/jervis-captcha/assets/jervis-captcha.js')->assertOk()->getContent();
+        $this->get('/jervis-captcha/assets/jervis-captcha.js')->assertOk();
+        $entry = file_get_contents(dirname(__DIR__) . '/resources/dist/jervis-captcha.js');
         self::assertIsString($entry);
         self::assertGreaterThan(1000, strlen($entry));
         self::assertStringContainsString('jervis-captcha', $entry);

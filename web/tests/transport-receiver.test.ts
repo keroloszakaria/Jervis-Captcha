@@ -7,7 +7,7 @@ describe('browser fetch receiver', () => {
     const bodies: unknown[] = [];
     const session = { sessionToken: 's'.repeat(43), expiresInMs: 300_000, accessibilityAvailable: true, fieldName: 'captchaProof' };
     const proof = { token: 'a'.repeat(64) + '.' + 'b'.repeat(43), expiresInMs: 30_000 };
-    const challenge = { id: 'c'.repeat(43), type: 'text', prompt: 'Read the image', expiresInMs: 60_000, minimumDelayMs: 0 };
+    const challenge = { id: 'c'.repeat(43), type: 'math', prompt: '2 + 3 = ?', expiresInMs: 60_000, minimumDelayMs: 0 };
     const transport: typeof fetch = function (this: unknown, input, init) {
       if (this !== globalThis) throw new TypeError('Illegal invocation');
       const path = new URL(String(input)).pathname; calls.push(path);

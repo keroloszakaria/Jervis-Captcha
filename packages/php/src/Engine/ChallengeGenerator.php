@@ -136,7 +136,7 @@ final class ChallengeGenerator
         $transparent = imagecolorallocatealpha($base, 255, 255, 255, 127);
         imagefill($base, 0, 0, $transparent);
         $color = imagecolorallocate($base, 25, 45, 80);
-        imagefilledpolygon($base, [[60, 10], [95, 70], [70, 65], [70, 108], [50, 108], [50, 65], [25, 70]], $color);
+        imagefilledpolygon($base, [60, 10, 95, 70, 70, 65, 70, 108, 50, 108, 50, 65, 25, 70], $color);
         $rotation = random_int(20, 340);
         $rotated = imagerotate($base, -$rotation, $transparent);
         imagedestroy($base);

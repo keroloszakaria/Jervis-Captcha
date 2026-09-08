@@ -3,7 +3,7 @@ var e = class extends Error {
 	constructor(e, t = 0) {
 		super(e), this.code = e, this.status = t, this.name = "CaptchaError";
 	}
-}, t = /* @__PURE__ */ new Set([
+}, t = /^[A-Za-z0-9_-]{43}$/, n = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/, r = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/, i = /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/, a = /* @__PURE__ */ new Set([
 	"text",
 	"slider",
 	"drag",
@@ -14,94 +14,141 @@ var e = class extends Error {
 	"logic",
 	"pow"
 ]);
-function n(e) {
-	return !!e && typeof e.id == "string" && e.id.length === 43 && t.has(e.type) && Number.isFinite(e.expiresInMs) && e.expiresInMs > 0 && e.expiresInMs <= 9e5 && Number.isFinite(e.minimumDelayMs) && e.minimumDelayMs >= 0 && e.minimumDelayMs <= 1e4 && (!e.work || typeof e.work.seed == "string" && e.work.seed.length === 43 && Number.isInteger(e.work.bits) && e.work.bits >= 1 && e.work.bits <= 20) && (!e.image || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(e.image)) && (!e.piece || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(e.piece)) && (!e.audio || /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(e.audio));
+function o(e, t, n) {
+	return Number.isInteger(e) && Number(e) >= t && Number(e) <= n;
 }
-var r = class {
-	constructor(t = "/", n = globalThis.fetch) {
-		this.transport = n;
-		let r = typeof location > "u" ? "http://localhost/" : location.href;
-		if (this.base = new URL(t.endsWith("/") ? t : t + "/", r), !["http:", "https:"].includes(this.base.protocol) || this.base.username || this.base.password || this.base.search || this.base.hash) throw new e("invalid_endpoint");
+function s(e) {
+	return e === void 0 || t.test(e.seed) && Number.isInteger(e.bits) && e.bits >= 1 && e.bits <= 20;
+}
+function c(e, t, n = !1) {
+	return !o(e.width, 80, 1e3) || !o(e.height, 60, 1e3) ? !1 : t ? o(e.pieceSize, 8, Math.min(e.width, e.height)) ? e.pieceTop === void 0 ? !n : o(e.pieceTop, 0, e.height - e.pieceSize) : !1 : !0;
+}
+function l(e) {
+	if (!e || typeof e.id != "string" || !t.test(e.id) || !a.has(e.type) || typeof e.prompt != "string" || e.prompt.length === 0 || e.prompt.length > 500 || !Number.isFinite(e.expiresInMs) || e.expiresInMs <= 0 || e.expiresInMs > 9e5 || !Number.isFinite(e.minimumDelayMs) || e.minimumDelayMs < 0 || e.minimumDelayMs > 1e4 || !s(e.work) || e.image !== void 0 && !r.test(e.image) || e.piece !== void 0 && !r.test(e.piece) || e.audio !== void 0 && !i.test(e.audio)) return !1;
+	switch (e.type) {
+		case "text":
+		case "rotate": return typeof e.image == "string" && r.test(e.image) && e.piece === void 0 && e.audio === void 0;
+		case "slider": return typeof e.image == "string" && r.test(e.image) && typeof e.piece == "string" && r.test(e.piece) && e.audio === void 0 && c(e, !0, !0);
+		case "drag": return typeof e.image == "string" && r.test(e.image) && typeof e.piece == "string" && r.test(e.piece) && e.audio === void 0 && c(e, !0, !1);
+		case "click": return typeof e.image == "string" && r.test(e.image) && e.piece === void 0 && e.audio === void 0 && c(e, !1);
+		case "audio": return typeof e.audio == "string" && i.test(e.audio) && e.image === void 0 && e.piece === void 0;
+		case "math":
+		case "logic": return e.image === void 0 && e.piece === void 0 && e.audio === void 0;
+		case "pow": return e.image === void 0 && e.piece === void 0 && e.audio === void 0 && e.work !== void 0;
+	}
+}
+function u(e, t) {
+	if (typeof location > "u" || e.origin !== location.origin) return {};
+	let n = t || (typeof document > "u" ? "" : document.querySelector("meta[name=\"csrf-token\"]")?.content ?? "");
+	if (n) return { "X-CSRF-TOKEN": n };
+	if (typeof document > "u") return {};
+	let r = document.cookie.split(";").map((e) => e.trim()).find((e) => e.startsWith("XSRF-TOKEN="))?.slice(11);
+	if (!r) return {};
+	try {
+		return { "X-XSRF-TOKEN": decodeURIComponent(r) };
+	} catch {
+		return {};
+	}
+}
+var d = class {
+	constructor(t = "/", n = globalThis.fetch, r = "") {
+		this.transport = n, this.csrfToken = r;
+		let i = typeof location > "u" ? "http://localhost/" : location.href;
+		if (this.base = new URL(t.endsWith("/") ? t : t + "/", i), !["http:", "https:"].includes(this.base.protocol) || this.base.username || this.base.password || this.base.search || this.base.hash) throw new e("invalid_endpoint");
 	}
 	async post(t, n, r) {
 		let i = new AbortController(), a = () => i.abort();
 		r?.addEventListener("abort", a, { once: !0 }), r?.aborted && i.abort();
 		let o = setTimeout(a, 15e3);
 		try {
-			let r = await this.transport.call(globalThis, new URL(t, this.base), {
+			let r = new URL(t, this.base), a = {
+				"Content-Type": "application/json",
+				...u(r, this.csrfToken)
+			}, o = await this.transport.call(globalThis, r, {
 				method: "POST",
-				credentials: "omit",
+				credentials: "same-origin",
 				redirect: "error",
 				cache: "no-store",
-				headers: { "Content-Type": "application/json" },
+				headers: a,
 				body: JSON.stringify(n),
 				signal: i.signal
-			}), a = await r.text();
-			if (a.length > 1e6) throw new e("invalid_response", r.status);
-			let o;
+			}), s = Number(o.headers.get("content-length") ?? "0");
+			if (Number.isFinite(s) && s > 1e6) throw new e("invalid_response", o.status);
+			let c = await o.text();
+			if (c.length > 1e6) throw new e("invalid_response", o.status);
+			let l;
 			try {
-				o = JSON.parse(a);
+				l = JSON.parse(c);
 			} catch {
-				throw new e("invalid_response", r.status);
+				throw new e("invalid_response", o.status);
 			}
-			if (!r.ok) throw new e(o?.code ?? "request_failed", r.status);
-			return o;
+			if (!o.ok) throw new e(l?.code ?? "request_failed", o.status);
+			return l;
 		} catch (t) {
 			throw t instanceof e ? t : new e(i.signal.aborted ? "request_cancelled" : "network_error");
 		} finally {
 			clearTimeout(o), r?.removeEventListener("abort", a);
 		}
 	}
-	async issue(t, r) {
-		let i = await this.post("v1/challenges", { sessionToken: t }, r);
-		if (!n(i)) throw new e("invalid_response");
-		return i;
-	}
-	async solve(t, n, r, i, a) {
-		let o = await this.post("v1/answers", {
-			sessionToken: t,
-			challengeId: n,
-			answer: r,
-			workNonce: i
-		}, a);
-		if (!o || typeof o.token != "string" || !/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/.test(o.token) || !Number.isFinite(o.expiresInMs) || o.expiresInMs <= 0 || o.expiresInMs > 12e4) throw new e("invalid_response");
+	async createSession(r, i = "standard", a) {
+		if (!/^[A-Za-z0-9._-]{1,64}$/.test(r) || !["standard", "accessible"].includes(i)) throw new e("invalid_context");
+		if (typeof location < "u" && this.base.origin !== location.origin) throw new e("managed_session_requires_same_origin");
+		let o = await this.post(`session/${encodeURIComponent(r)}`, { variant: i }, a);
+		if (!o || typeof o.sessionToken != "string" || !t.test(o.sessionToken) || !Number.isFinite(o.expiresInMs) || o.expiresInMs <= 0 || o.expiresInMs > 9e5 || typeof o.accessibilityAvailable != "boolean" || typeof o.fieldName != "string" || !n.test(o.fieldName)) throw new e("invalid_response");
 		return o;
 	}
-}, i = globalThis, a = i.ShadowRoot && (i.ShadyCSS === void 0 || i.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, o = Symbol(), s = /* @__PURE__ */ new WeakMap(), c = class {
+	async issue(n, r) {
+		if (!t.test(n)) throw new e("invalid_session");
+		let i = await this.post("v1/challenges", { sessionToken: n }, r);
+		if (!l(i)) throw new e("invalid_response");
+		return i;
+	}
+	async solve(n, r, i, a, o) {
+		if (!t.test(n) || !t.test(r)) throw new e("invalid_challenge");
+		let s = await this.post("v1/answers", {
+			sessionToken: n,
+			challengeId: r,
+			answer: i,
+			workNonce: a
+		}, o);
+		if (!s || typeof s.token != "string" || !/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/.test(s.token) || !Number.isFinite(s.expiresInMs) || s.expiresInMs <= 0 || s.expiresInMs > 12e4) throw new e("invalid_response");
+		return s;
+	}
+}, f = globalThis, p = f.ShadowRoot && (f.ShadyCSS === void 0 || f.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, m = Symbol(), h = /* @__PURE__ */ new WeakMap(), ee = class {
 	constructor(e, t, n) {
-		if (this._$cssResult$ = !0, n !== o) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+		if (this._$cssResult$ = !0, n !== m) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
 		this.cssText = e, this.t = t;
 	}
 	get styleSheet() {
 		let e = this.o, t = this.t;
-		if (a && e === void 0) {
+		if (p && e === void 0) {
 			let n = t !== void 0 && t.length === 1;
-			n && (e = s.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), n && s.set(t, e));
+			n && (e = h.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), n && h.set(t, e));
 		}
 		return e;
 	}
 	toString() {
 		return this.cssText;
 	}
-}, l = (e) => new c(typeof e == "string" ? e : e + "", void 0, o), u = (e, ...t) => new c(e.length === 1 ? e[0] : t.reduce((t, n, r) => t + ((e) => {
+}, te = (e) => new ee(typeof e == "string" ? e : e + "", void 0, m), ne = (e, ...t) => new ee(e.length === 1 ? e[0] : t.reduce((t, n, r) => t + ((e) => {
 	if (!0 === e._$cssResult$) return e.cssText;
 	if (typeof e == "number") return e;
 	throw Error("Value passed to 'css' function must be a 'css' function result: " + e + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
-})(n) + e[r + 1], e[0]), e, o), d = (e, t) => {
-	if (a) e.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
+})(n) + e[r + 1], e[0]), e, m), re = (e, t) => {
+	if (p) e.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
 	else for (let n of t) {
-		let t = document.createElement("style"), r = i.litNonce;
+		let t = document.createElement("style"), r = f.litNonce;
 		r !== void 0 && t.setAttribute("nonce", r), t.textContent = n.cssText, e.appendChild(t);
 	}
-}, f = a ? (e) => e : (e) => e instanceof CSSStyleSheet ? ((e) => {
+}, g = p ? (e) => e : (e) => e instanceof CSSStyleSheet ? ((e) => {
 	let t = "";
 	for (let n of e.cssRules) t += n.cssText;
-	return l(t);
-})(e) : e, { is: ee, defineProperty: te, getOwnPropertyDescriptor: ne, getOwnPropertyNames: re, getOwnPropertySymbols: ie, getPrototypeOf: ae } = Object, p = globalThis, m = p.trustedTypes, oe = m ? m.emptyScript : "", se = p.reactiveElementPolyfillSupport, h = (e, t) => e, g = {
+	return te(t);
+})(e) : e, { is: ie, defineProperty: ae, getOwnPropertyDescriptor: oe, getOwnPropertyNames: se, getOwnPropertySymbols: ce, getPrototypeOf: le } = Object, _ = globalThis, v = _.trustedTypes, ue = v ? v.emptyScript : "", de = _.reactiveElementPolyfillSupport, y = (e, t) => e, b = {
 	toAttribute(e, t) {
 		switch (t) {
 			case Boolean:
-				e = e ? oe : null;
+				e = e ? ue : null;
 				break;
 			case Object:
 			case Array: e = e == null ? e : JSON.stringify(e);
@@ -126,30 +173,30 @@ var r = class {
 		}
 		return n;
 	}
-}, _ = (e, t) => !ee(e, t), v = {
+}, x = (e, t) => !ie(e, t), S = {
 	attribute: !0,
 	type: String,
-	converter: g,
+	converter: b,
 	reflect: !1,
 	useDefault: !1,
-	hasChanged: _
+	hasChanged: x
 };
-Symbol.metadata ??= Symbol("metadata"), p.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-var y = class extends HTMLElement {
+Symbol.metadata ??= Symbol("metadata"), _.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
+var C = class extends HTMLElement {
 	static addInitializer(e) {
 		this._$Ei(), (this.l ??= []).push(e);
 	}
 	static get observedAttributes() {
 		return this.finalize(), this._$Eh && [...this._$Eh.keys()];
 	}
-	static createProperty(e, t = v) {
+	static createProperty(e, t = S) {
 		if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
 			let n = Symbol(), r = this.getPropertyDescriptor(e, n, t);
-			r !== void 0 && te(this.prototype, e, r);
+			r !== void 0 && ae(this.prototype, e, r);
 		}
 	}
 	static getPropertyDescriptor(e, t, n) {
-		let { get: r, set: i } = ne(this.prototype, e) ?? {
+		let { get: r, set: i } = oe(this.prototype, e) ?? {
 			get() {
 				return this[t];
 			},
@@ -168,17 +215,17 @@ var y = class extends HTMLElement {
 		};
 	}
 	static getPropertyOptions(e) {
-		return this.elementProperties.get(e) ?? v;
+		return this.elementProperties.get(e) ?? S;
 	}
 	static _$Ei() {
-		if (this.hasOwnProperty(h("elementProperties"))) return;
-		let e = ae(this);
+		if (this.hasOwnProperty(y("elementProperties"))) return;
+		let e = le(this);
 		e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
 	}
 	static finalize() {
-		if (this.hasOwnProperty(h("finalized"))) return;
-		if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(h("properties"))) {
-			let e = this.properties, t = [...re(e), ...ie(e)];
+		if (this.hasOwnProperty(y("finalized"))) return;
+		if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(y("properties"))) {
+			let e = this.properties, t = [...se(e), ...ce(e)];
 			for (let n of t) this.createProperty(n, e[n]);
 		}
 		let e = this[Symbol.metadata];
@@ -197,8 +244,8 @@ var y = class extends HTMLElement {
 		let t = [];
 		if (Array.isArray(e)) {
 			let n = new Set(e.flat(1 / 0).reverse());
-			for (let e of n) t.unshift(f(e));
-		} else e !== void 0 && t.push(f(e));
+			for (let e of n) t.unshift(g(e));
+		} else e !== void 0 && t.push(g(e));
 		return t;
 	}
 	static _$Eu(e, t) {
@@ -224,7 +271,7 @@ var y = class extends HTMLElement {
 	}
 	createRenderRoot() {
 		let e = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
-		return d(e, this.constructor.elementStyles), e;
+		return re(e, this.constructor.elementStyles), e;
 	}
 	connectedCallback() {
 		this.renderRoot ??= this.createRenderRoot(), this.enableUpdating(!0), this._$EO?.forEach((e) => e.hostConnected?.());
@@ -239,14 +286,14 @@ var y = class extends HTMLElement {
 	_$ET(e, t) {
 		let n = this.constructor.elementProperties.get(e), r = this.constructor._$Eu(e, n);
 		if (r !== void 0 && !0 === n.reflect) {
-			let i = (n.converter?.toAttribute === void 0 ? g : n.converter).toAttribute(t, n.type);
+			let i = (n.converter?.toAttribute === void 0 ? b : n.converter).toAttribute(t, n.type);
 			this._$Em = e, i == null ? this.removeAttribute(r) : this.setAttribute(r, i), this._$Em = null;
 		}
 	}
 	_$AK(e, t) {
 		let n = this.constructor, r = n._$Eh.get(e);
 		if (r !== void 0 && this._$Em !== r) {
-			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? g : e.converter;
+			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? b : e.converter;
 			this._$Em = r;
 			let a = i.fromAttribute(t, e.type);
 			this[r] = a ?? this._$Ej?.get(r) ?? a, this._$Em = null;
@@ -255,7 +302,7 @@ var y = class extends HTMLElement {
 	requestUpdate(e, t, n, r = !1, i) {
 		if (e !== void 0) {
 			let a = this.constructor;
-			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? _)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
+			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? x)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
 			this.C(e, t, n);
 		}
 		!1 === this.isUpdatePending && (this._$ES = this._$EP());
@@ -319,89 +366,89 @@ var y = class extends HTMLElement {
 	updated(e) {}
 	firstUpdated(e) {}
 };
-y.elementStyles = [], y.shadowRootOptions = { mode: "open" }, y[h("elementProperties")] = /* @__PURE__ */ new Map(), y[h("finalized")] = /* @__PURE__ */ new Map(), se?.({ ReactiveElement: y }), (p.reactiveElementVersions ??= []).push("2.1.2");
+C.elementStyles = [], C.shadowRootOptions = { mode: "open" }, C[y("elementProperties")] = /* @__PURE__ */ new Map(), C[y("finalized")] = /* @__PURE__ */ new Map(), de?.({ ReactiveElement: C }), (_.reactiveElementVersions ??= []).push("2.1.2");
 //#endregion
 //#region node_modules/lit-html/lit-html.js
-var b = globalThis, x = (e) => e, S = b.trustedTypes, C = S ? S.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, ce = "$lit$", w = `lit$${Math.random().toFixed(9).slice(2)}$`, T = "?" + w, le = `<${T}>`, E = document, D = () => E.createComment(""), O = (e) => e === null || typeof e != "object" && typeof e != "function", k = Array.isArray, ue = (e) => k(e) || typeof e?.[Symbol.iterator] == "function", A = "[ 	\n\f\r]", j = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, M = /-->/g, N = />/g, P = RegExp(`>|${A}(?:([^\\s"'>=/]+)(${A}*=${A}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), F = /'/g, I = /"/g, L = /^(?:script|style|textarea|title)$/i, R = ((e) => (t, ...n) => ({
+var w = globalThis, T = (e) => e, E = w.trustedTypes, fe = E ? E.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, D = "$lit$", O = `lit$${Math.random().toFixed(9).slice(2)}$`, k = "?" + O, pe = `<${k}>`, A = document, j = () => A.createComment(""), M = (e) => e === null || typeof e != "object" && typeof e != "function", N = Array.isArray, me = (e) => N(e) || typeof e?.[Symbol.iterator] == "function", P = "[ 	\n\f\r]", F = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, I = /-->/g, L = />/g, R = RegExp(`>|${P}(?:([^\\s"'>=/]+)(${P}*=${P}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), z = /'/g, B = /"/g, V = /^(?:script|style|textarea|title)$/i, H = ((e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
 	values: n
-}))(1), z = Symbol.for("lit-noChange"), B = Symbol.for("lit-nothing"), V = /* @__PURE__ */ new WeakMap(), H = E.createTreeWalker(E, 129);
-function U(e, t) {
-	if (!k(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
-	return C === void 0 ? t : C.createHTML(t);
+}))(1), U = Symbol.for("lit-noChange"), W = Symbol.for("lit-nothing"), he = /* @__PURE__ */ new WeakMap(), G = A.createTreeWalker(A, 129);
+function K(e, t) {
+	if (!N(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
+	return fe === void 0 ? t : fe.createHTML(t);
 }
-var de = (e, t) => {
-	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = j;
+var ge = (e, t) => {
+	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = F;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
-		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === j ? c[1] === "!--" ? o = M : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = P) : (L.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = P) : o = N : o === P ? c[0] === ">" ? (o = i ?? j, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? P : c[3] === "\"" ? I : F) : o === I || o === F ? o = P : o === M || o === N ? o = j : (o = P, i = void 0);
-		let d = o === P && e[t + 1].startsWith("/>") ? " " : "";
-		a += o === j ? n + le : l >= 0 ? (r.push(s), n.slice(0, l) + ce + n.slice(l) + w + d) : n + w + (l === -2 ? t : d);
+		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === F ? c[1] === "!--" ? o = I : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = R) : (V.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = R) : o = L : o === R ? c[0] === ">" ? (o = i ?? F, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? R : c[3] === "\"" ? B : z) : o === B || o === z ? o = R : o === I || o === L ? o = F : (o = R, i = void 0);
+		let d = o === R && e[t + 1].startsWith("/>") ? " " : "";
+		a += o === F ? n + pe : l >= 0 ? (r.push(s), n.slice(0, l) + D + n.slice(l) + O + d) : n + O + (l === -2 ? t : d);
 	}
-	return [U(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, W = class e {
+	return [K(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, q = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = de(t, n);
-		if (this.el = e.createElement(l, r), H.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = ge(t, n);
+		if (this.el = e.createElement(l, r), G.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = H.nextNode()) !== null && c.length < s;) {
+		for (; (i = G.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
-				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(ce)) {
-					let t = u[o++], n = i.getAttribute(e).split(w), r = /([.?@])?(.*)/.exec(t);
+				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(D)) {
+					let t = u[o++], n = i.getAttribute(e).split(O), r = /([.?@])?(.*)/.exec(t);
 					c.push({
 						type: 1,
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? pe : r[1] === "?" ? me : r[1] === "@" ? he : q
+						ctor: r[1] === "." ? ve : r[1] === "?" ? ye : r[1] === "@" ? be : X
 					}), i.removeAttribute(e);
-				} else e.startsWith(w) && (c.push({
+				} else e.startsWith(O) && (c.push({
 					type: 6,
 					index: a
 				}), i.removeAttribute(e));
-				if (L.test(i.tagName)) {
-					let e = i.textContent.split(w), t = e.length - 1;
+				if (V.test(i.tagName)) {
+					let e = i.textContent.split(O), t = e.length - 1;
 					if (t > 0) {
-						i.textContent = S ? S.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], D()), H.nextNode(), c.push({
+						i.textContent = E ? E.emptyScript : "";
+						for (let n = 0; n < t; n++) i.append(e[n], j()), G.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
-						i.append(e[t], D());
+						i.append(e[t], j());
 					}
 				}
 			} else if (i.nodeType === 8) {
-				if (i.data === T) c.push({
+				if (i.data === k) c.push({
 					type: 2,
 					index: a
 				});
 				else {
 					let e = -1;
-					for (; (e = i.data.indexOf(w, e + 1)) !== -1;) c.push({
+					for (; (e = i.data.indexOf(O, e + 1)) !== -1;) c.push({
 						type: 7,
 						index: a
-					}), e += w.length - 1;
+					}), e += O.length - 1;
 				}
 			}
 			a++;
 		}
 	}
 	static createElement(e, t) {
-		let n = E.createElement("template");
+		let n = A.createElement("template");
 		return n.innerHTML = e, n;
 	}
 };
-function G(e, t, n = e, r) {
-	if (t === z) return t;
-	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = O(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = G(e, i._$AS(e, t.values), i, r)), t;
+function J(e, t, n = e, r) {
+	if (t === U) return t;
+	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = M(t) ? void 0 : t._$litDirective$;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = J(e, i._$AS(e, t.values), i, r)), t;
 }
-var fe = class {
+var _e = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -412,28 +459,28 @@ var fe = class {
 		return this._$AM._$AU;
 	}
 	u(e) {
-		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? E).importNode(t, !0);
-		H.currentNode = r;
-		let i = H.nextNode(), a = 0, o = 0, s = n[0];
+		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? A).importNode(t, !0);
+		G.currentNode = r;
+		let i = G.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new K(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new ge(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new Y(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new xe(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== s?.index && (i = H.nextNode(), a++);
+			a !== s?.index && (i = G.nextNode(), a++);
 		}
-		return H.currentNode = E, r;
+		return G.currentNode = A, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, K = class e {
+}, Y = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = B, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
+		this.type = 2, this._$AH = W, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -446,7 +493,7 @@ var fe = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = G(this, e, t), O(e) ? e === B || e == null || e === "" ? (this._$AH !== B && this._$AR(), this._$AH = B) : e !== this._$AH && e !== z && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? ue(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = J(this, e, t), M(e) ? e === W || e == null || e === "" ? (this._$AH !== W && this._$AR(), this._$AH = W) : e !== this._$AH && e !== U && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? me(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -455,36 +502,36 @@ var fe = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== B && O(this._$AH) ? this._$AA.nextSibling.data = e : this.T(E.createTextNode(e)), this._$AH = e;
+		this._$AH !== W && M(this._$AH) ? this._$AA.nextSibling.data = e : this.T(A.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = W.createElement(U(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = q.createElement(K(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new fe(r, this), n = e.u(this.options);
+			let e = new _e(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = V.get(e.strings);
-		return t === void 0 && V.set(e.strings, t = new W(e)), t;
+		let t = he.get(e.strings);
+		return t === void 0 && he.set(e.strings, t = new q(e)), t;
 	}
 	k(t) {
-		k(this._$AH) || (this._$AH = [], this._$AR());
+		N(this._$AH) || (this._$AH = [], this._$AR());
 		let n = this._$AH, r, i = 0;
-		for (let a of t) i === n.length ? n.push(r = new e(this.O(D()), this.O(D()), this, this.options)) : r = n[i], r._$AI(a), i++;
+		for (let a of t) i === n.length ? n.push(r = new e(this.O(j()), this.O(j()), this, this.options)) : r = n[i], r._$AI(a), i++;
 		i < n.length && (this._$AR(r && r._$AB.nextSibling, i), n.length = i);
 	}
 	_$AR(e = this._$AA.nextSibling, t) {
 		for (this._$AP?.(!1, !0, t); e !== this._$AB;) {
-			let t = x(e).nextSibling;
-			x(e).remove(), e = t;
+			let t = T(e).nextSibling;
+			T(e).remove(), e = t;
 		}
 	}
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, q = class {
+}, X = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -492,47 +539,47 @@ var fe = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = B, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = B;
+		this.type = 1, this._$AH = W, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = W;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = G(this, e, t, 0), a = !O(e) || e !== this._$AH && e !== z, a && (this._$AH = e);
+		if (i === void 0) e = J(this, e, t, 0), a = !M(e) || e !== this._$AH && e !== U, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = G(this, r[n + o], t, o), s === z && (s = this._$AH[o]), a ||= !O(s) || s !== this._$AH[o], s === B ? e = B : e !== B && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = J(this, r[n + o], t, o), s === U && (s = this._$AH[o]), a ||= !M(s) || s !== this._$AH[o], s === W ? e = W : e !== W && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === B ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === W ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, pe = class extends q {
+}, ve = class extends X {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === B ? void 0 : e;
+		this.element[this.name] = e === W ? void 0 : e;
 	}
-}, me = class extends q {
+}, ye = class extends X {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== B);
+		this.element.toggleAttribute(this.name, !!e && e !== W);
 	}
-}, he = class extends q {
+}, be = class extends X {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = G(this, e, t, 0) ?? B) === z) return;
-		let n = this._$AH, r = e === B && n !== B || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== B && (n === B || r);
+		if ((e = J(this, e, t, 0) ?? W) === U) return;
+		let n = this._$AH, r = e === W && n !== W || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== W && (n === W || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, ge = class {
+}, xe = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -540,18 +587,18 @@ var fe = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		G(this, e);
+		J(this, e);
 	}
-}, _e = b.litHtmlPolyfillSupport;
-_e?.(W, K), (b.litHtmlVersions ??= []).push("3.3.3");
-var ve = (e, t, n) => {
+}, Se = w.litHtmlPolyfillSupport;
+Se?.(q, Y), (w.litHtmlVersions ??= []).push("3.3.3");
+var Ce = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new K(t.insertBefore(D(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new Y(t.insertBefore(j(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, J = globalThis, Y = class extends y {
+}, Z = globalThis, Q = class extends C {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -561,7 +608,7 @@ var ve = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = ve(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ce(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -570,21 +617,23 @@ var ve = (e, t, n) => {
 		super.disconnectedCallback(), this._$Do?.setConnected(!1);
 	}
 	render() {
-		return z;
+		return U;
 	}
 };
-Y._$litElement$ = !0, Y.finalized = !0, J.litElementHydrateSupport?.({ LitElement: Y });
-var ye = J.litElementPolyfillSupport;
-ye?.({ LitElement: Y }), (J.litElementVersions ??= []).push("4.2.2");
+Q._$litElement$ = !0, Q.finalized = !0, Z.litElementHydrateSupport?.({ LitElement: Q });
+var we = Z.litElementPolyfillSupport;
+we?.({ LitElement: Q }), (Z.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region web/src/i18n.ts
-var be = {
+var Te = {
 	en: {
 		title: "Verify your request",
 		subtitle: "Private verification · runs locally",
 		start: "Start verification",
+		retry: "Start a new verification",
 		verify: "Verify",
 		refresh: "New challenge",
+		accessible: "Use an accessible challenge",
 		answer: "Your answer",
 		loading: "Preparing your challenge…",
 		verifying: "Checking securely…",
@@ -608,10 +657,11 @@ var be = {
 		required: "Complete verification before submitting.",
 		incorrect_answer: "That did not match. Try again; attempts are limited.",
 		too_early: "Please wait a moment before verifying.",
-		network_error: "Cannot reach the local verification service.",
+		network_error: "Cannot reach the verification endpoint.",
 		rate_limited: "Too many requests. Try again later.",
 		session_locked: "Attempt limit reached. Request a new session.",
 		challenge_expired: "This challenge expired. Request a new one.",
+		accessibility_unavailable: "An accessible challenge is not available for this action.",
 		work_timeout: "The local check reached its device budget. Try again or use your application’s alternative verification route.",
 		error: "Verification could not complete. Request a new session or contact your administrator."
 	},
@@ -619,8 +669,10 @@ var be = {
 		title: "تحقّق من الطلب",
 		subtitle: "تحقّق خاص يعمل محليًا",
 		start: "ابدأ التحقّق",
+		retry: "ابدأ تحقّقًا جديدًا",
 		verify: "تحقّق",
 		refresh: "تحدٍّ جديد",
+		accessible: "استخدم تحديًا ميسّرًا",
 		answer: "الإجابة",
 		loading: "جارٍ تجهيز التحدّي…",
 		verifying: "جارٍ التحقّق…",
@@ -644,14 +696,15 @@ var be = {
 		required: "أكمل التحقّق قبل الإرسال.",
 		incorrect_answer: "الإجابة غير مطابقة. حاول مجددًا؛ عدد المحاولات محدود.",
 		too_early: "انتظر قليلًا قبل التحقّق.",
-		network_error: "تعذّر الوصول إلى خدمة التحقّق المحلية.",
+		network_error: "تعذّر الوصول إلى مسار التحقّق.",
 		rate_limited: "طلبات كثيرة. حاول لاحقًا.",
 		session_locked: "وصلت إلى حد المحاولات. اطلب جلسة جديدة.",
 		challenge_expired: "انتهت صلاحية التحدّي. اطلب تحدّيًا جديدًا.",
+		accessibility_unavailable: "لا يوجد تحدٍ ميسّر متاح لهذا الإجراء.",
 		work_timeout: "وصل الفحص إلى الحد المسموح لموارد الجهاز. أعد المحاولة أو استخدم مسار التحقّق البديل في التطبيق.",
 		error: "تعذّر إكمال التحقّق. اطلب جلسة جديدة أو تواصل مع المسؤول."
 	}
-}, xe = u`
+}, Ee = ne`
   :host{--jc-accent:#2463eb;--jc-bg:#fff;--jc-fg:#17253c;--jc-muted:#61718b;--jc-border:#dce4f0;display:inline-block;width:100%;max-width:370px;font:14px/1.5 system-ui,sans-serif;color:var(--jc-fg);color-scheme:light}
   :host([theme=dark]){--jc-bg:#121d30;--jc-fg:#edf3ff;--jc-muted:#b3c1d8;--jc-border:#31415b;color-scheme:dark}
   @media(prefers-color-scheme:dark){:host([theme=auto]){--jc-bg:#121d30;--jc-fg:#edf3ff;--jc-muted:#b3c1d8;--jc-border:#31415b;color-scheme:dark}}
@@ -661,11 +714,11 @@ var be = {
   .board{position:relative;width:100%;max-width:300px;margin:12px auto;overflow:hidden;border-radius:10px;touch-action:none;direction:ltr;background:#e8eff7}.board>img:first-child{display:block;width:100%;height:auto}.piece{position:absolute;cursor:grab;user-select:none;touch-action:none;filter:drop-shadow(0 2px 3px #0008)}.rotation{width:180px;height:180px;margin:12px auto}.rotation img{width:100%;height:100%;display:block}.text-image{width:100%;max-width:300px;display:block;margin:8px auto;border-radius:10px}.point{position:absolute;width:22px;height:22px;border:2px solid white;border-radius:50%;background:var(--jc-accent);color:white;display:grid;place-items:center;font-size:11px;transform:translate(-50%,-50%);pointer-events:none}.cursor{position:absolute;width:14px;height:14px;border:2px solid white;box-shadow:0 0 0 1px #142030;transform:translate(-50%,-50%);pointer-events:none}
   label{display:block;font-size:12px;color:var(--jc-muted);margin-top:12px}input[type=text]{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--jc-border);background:var(--jc-bg);color:var(--jc-fg);margin-top:5px;letter-spacing:.12em}input[type=range]{width:100%;accent-color:var(--jc-accent);direction:ltr;margin-top:7px}.range-value{font-variant-numeric:tabular-nums;float:inline-end}audio{width:100%;margin-top:10px}footer{margin-top:16px;padding-top:12px;border-top:1px solid var(--jc-border);display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--jc-muted)}.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--jc-border);border-top-color:var(--jc-accent);border-radius:50%;animation:spin .8s linear infinite;margin-inline-end:6px}.math{font-size:24px;letter-spacing:.05em;text-align:center;padding:20px;background:#8395b012;border-radius:10px;direction:ltr}
   @keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation:none}}.hidden{display:none}
-`, X = "const e=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),t=(e,t)=>e>>>t|e<<32-t;function n(n){if(n.length>55||/[^\\x00-\\x7f]/.test(n))throw Error(`PoW hash accepts ASCII up to 55 bytes`);let r=new Uint32Array(64);for(let e=0;e<n.length;e++)r[e>>2]=r[e>>2]|n.charCodeAt(e)<<24-e%4*8;let i=n.length;r[i>>2]=r[i>>2]|128<<24-i%4*8,r[15]=i*8;for(let e=16;e<64;e++){let n=r[e-15],i=r[e-2];r[e]=r[e-16]+(t(n,7)^t(n,18)^n>>>3)+r[e-7]+(t(i,17)^t(i,19)^i>>>10)}let a=new Uint32Array([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]),o=a[0],s=a[1],c=a[2],l=a[3],u=a[4],d=a[5],f=a[6],p=a[7];for(let n=0;n<64;n++){let i=p+(t(u,6)^t(u,11)^t(u,25))+(u&d^~u&f)+e[n]+r[n]|0,a=(t(o,2)^t(o,13)^t(o,22))+(o&s^o&c^s&c)|0;p=f,f=d,d=u,u=l+i|0,l=c,c=s,s=o,o=i+a|0}let m=[o,s,c,l,u,d,f,p];for(let e=0;e<8;e++)a[e]=a[e]+m[e];return a}function r(e,t,r){return!Number.isInteger(r)||r<1||r>20?!1:!(n(e+`:`+t)[0]>>>32-r)}self.onmessage=e=>{let{seed:t,bits:n}=e.data;if(!/^[A-Za-z0-9_-]{43}$/.test(t)||!Number.isInteger(n)||n<1||n>20){self.postMessage({error:`invalid_work`});return}let i=performance.now();for(let e=0;e<16777216;e++){if(r(t,String(e),n)){self.postMessage({nonce:String(e)});return}if(!(e&1023)&&performance.now()-i>5e3)break}self.postMessage({error:`work_timeout`})};", Z = typeof self < "u" && self.Blob && new Blob(["URL.revokeObjectURL(import.meta.url);", X], { type: "text/javascript;charset=utf-8" });
-function Se(e) {
+`, De = "const e=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),t=(e,t)=>e>>>t|e<<32-t;function n(n){if(n.length>55||/[^\\x00-\\x7f]/.test(n))throw Error(`PoW hash accepts ASCII up to 55 bytes`);let r=new Uint32Array(64);for(let e=0;e<n.length;e++)r[e>>2]=r[e>>2]|n.charCodeAt(e)<<24-e%4*8;let i=n.length;r[i>>2]=r[i>>2]|128<<24-i%4*8,r[15]=i*8;for(let e=16;e<64;e++){let n=r[e-15],i=r[e-2];r[e]=r[e-16]+(t(n,7)^t(n,18)^n>>>3)+r[e-7]+(t(i,17)^t(i,19)^i>>>10)}let a=new Uint32Array([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]),o=a[0],s=a[1],c=a[2],l=a[3],u=a[4],d=a[5],f=a[6],p=a[7];for(let n=0;n<64;n++){let i=p+(t(u,6)^t(u,11)^t(u,25))+(u&d^~u&f)+e[n]+r[n]|0,a=(t(o,2)^t(o,13)^t(o,22))+(o&s^o&c^s&c)|0;p=f,f=d,d=u,u=l+i|0,l=c,c=s,s=o,o=i+a|0}let m=[o,s,c,l,u,d,f,p];for(let e=0;e<8;e++)a[e]=a[e]+m[e];return a}function r(e,t,r){return!Number.isInteger(r)||r<1||r>20?!1:!(n(e+`:`+t)[0]>>>32-r)}self.onmessage=e=>{let{seed:t,bits:n}=e.data;if(!/^[A-Za-z0-9_-]{43}$/.test(t)||!Number.isInteger(n)||n<1||n>20){self.postMessage({error:`invalid_work`});return}let i=performance.now();for(let e=0;e<16777216;e++){if(r(t,String(e),n)){self.postMessage({nonce:String(e)});return}if(!(e&1023)&&performance.now()-i>5e3)break}self.postMessage({error:`work_timeout`})};", Oe = typeof self < "u" && self.Blob && new Blob(["URL.revokeObjectURL(import.meta.url);", De], { type: "text/javascript;charset=utf-8" });
+function ke(e) {
 	let t;
 	try {
-		if (t = Z && (self.URL || self.webkitURL).createObjectURL(Z), !t) throw "";
+		if (t = Oe && (self.URL || self.webkitURL).createObjectURL(Oe), !t) throw "";
 		let n = new Worker(t, {
 			type: "module",
 			name: e?.name
@@ -674,7 +727,7 @@ function Se(e) {
 			(self.URL || self.webkitURL).revokeObjectURL(t);
 		}), n;
 	} catch {
-		return new Worker("data:text/javascript;charset=utf-8," + encodeURIComponent(X), {
+		return new Worker("data:text/javascript;charset=utf-8," + encodeURIComponent(De), {
 			type: "module",
 			name: e?.name
 		});
@@ -682,16 +735,21 @@ function Se(e) {
 }
 //#endregion
 //#region web/src/widget.ts
-var Q = class extends Y {
+var Ae = class extends Q {
 	static {
 		this.formAssociated = !0;
 	}
 	static {
-		this.styles = xe;
+		this.styles = Ee;
 	}
 	static {
 		this.properties = {
 			endpoint: { type: String },
+			action: { type: String },
+			csrfToken: {
+				type: String,
+				attribute: "csrf-token"
+			},
 			sessionToken: { attribute: !1 },
 			presentation: { type: String },
 			locale: { type: String },
@@ -720,13 +778,25 @@ var Q = class extends Y {
 		};
 	}
 	constructor() {
-		super(), this.endpoint = "/", this.sessionToken = "", this.presentation = "inline", this.locale = "en", this.theme = "auto", this.disabled = !1, this.name = "jervisCaptchaToken", this.status = "idle", this.errorCode = "", this.answerText = "", this.x = 0, this.y = 0, this.angle = 0, this.points = [], this.working = !1, this.proof = "", this.lastType = "", this.operation = 0, this.readyAt = 0, typeof this.attachInternals == "function" && (this.internals = this.attachInternals());
+		super(), this.endpoint = "", this.action = "", this.csrfToken = "", this.sessionToken = "", this.presentation = "inline", this.locale = "en", this.theme = "auto", this.disabled = !1, this.name = "jervisCaptchaToken", this.status = "idle", this.errorCode = "", this.answerText = "", this.x = 0, this.y = 0, this.angle = 0, this.points = [], this.working = !1, this.proof = "", this.lastType = "", this.operation = 0, this.readyAt = 0, this.managedSessionToken = "", this.managedVariant = "standard", this.accessibilityAvailable = !1, typeof this.attachInternals == "function" && (this.internals = this.attachInternals());
 	}
 	get token() {
 		return this.status === "success" ? this.proof : "";
 	}
+	get activeSessionToken() {
+		return this.sessionToken || this.managedSessionToken;
+	}
+	get resolvedEndpoint() {
+		return this.endpoint || (this.action && !this.sessionToken ? "/jervis-captcha/" : "/");
+	}
+	get canUseAccessibleChallenge() {
+		return !!this.action && !this.sessionToken && this.managedVariant === "standard" && this.accessibilityAvailable && this.status === "ready" && this.challenge?.type !== "audio";
+	}
+	client() {
+		return new d(this.resolvedEndpoint, globalThis.fetch, this.csrfToken);
+	}
 	get t() {
-		return be[this.locale === "ar" ? "ar" : "en"];
+		return Te[this.locale === "ar" ? "ar" : "en"];
 	}
 	event(e, t) {
 		this.dispatchEvent(new CustomEvent(e, {
@@ -739,7 +809,21 @@ var Q = class extends Y {
 		this.operation++, this.controller?.abort(), this.controller = void 0, this.worker?.terminate(), this.worker = void 0, this.working = !1, this.workNonce = void 0, clearTimeout(this.expiry), this.proof = "", this.internals?.setFormValue(null), this.internals?.setValidity({ customError: !0 }, this.t.required), this.event("jervis-reset");
 	}
 	reset() {
-		this.invalidate(), this.challenge = void 0, this.status = "idle", this.errorCode = "";
+		this.invalidate(), this.managedSessionToken = "", this.managedVariant = "standard", this.accessibilityAvailable = !1, this.challenge = void 0, this.status = "idle", this.errorCode = "";
+	}
+	async renew() {
+		let e = this.managedVariant;
+		this.reset(), this.managedVariant = e, this.presentation !== "checkbox" && !this.disabled && await this.start();
+	}
+	async recover() {
+		if (this.action && !this.sessionToken) {
+			await this.renew();
+			return;
+		}
+		this.reset(), this.event("jervis-renew");
+	}
+	async useAccessibleChallenge() {
+		this.canUseAccessibleChallenge && !this.disabled && (this.reset(), this.managedVariant = "accessible", await this.start());
 	}
 	formResetCallback() {
 		this.reset(), this.event("jervis-renew");
@@ -754,37 +838,45 @@ var Q = class extends Y {
 		this.reset(), super.disconnectedCallback();
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.hasUpdated && this.sessionToken && this.presentation !== "checkbox" && this.start();
+		super.connectedCallback(), this.hasUpdated && (this.activeSessionToken || this.action) && this.presentation !== "checkbox" && this.start();
 	}
 	updated(e) {
-		(e.has("sessionToken") || e.has("endpoint")) && (this.reset(), this.sessionToken && this.presentation !== "checkbox" && !this.disabled && this.start()), e.has("disabled") && this.disabled && this.reset();
+		(e.has("sessionToken") || e.has("endpoint") || e.has("action") || e.has("csrfToken")) && (this.reset(), (this.activeSessionToken || this.action) && this.presentation !== "checkbox" && !this.disabled && this.start()), e.has("disabled") && this.disabled && this.reset();
 	}
 	setExpiry(e, t) {
 		clearTimeout(this.expiry), this.expiry = setTimeout(() => {
-			t === this.operation && (this.invalidate(), this.status = "expired", this.event("jervis-expired"));
+			if (t !== this.operation) return;
+			let e = this.status === "success";
+			this.invalidate(), e && (this.managedSessionToken = ""), this.status = "expired", this.event("jervis-expired");
 		}, Math.max(0, e));
 	}
 	async start() {
-		if (!this.sessionToken || this.disabled || !this.isConnected) return;
+		if (!this.activeSessionToken && !this.action || this.disabled || !this.isConnected) return;
 		this.invalidate();
 		let e = this.operation;
 		this.controller = new AbortController(), this.challenge = void 0, this.status = "loading", this.errorCode = "", this.answerText = "", this.x = 0, this.y = 0, this.angle = 0, this.points = [], this.cursor = void 0;
 		let t = performance.now();
 		try {
-			let n = await new r(this.endpoint).issue(this.sessionToken, this.controller.signal);
+			let n = this.activeSessionToken;
+			if (!n) {
+				let t = await this.client().createSession(this.action, this.managedVariant, this.controller.signal);
+				if (e !== this.operation) return;
+				this.managedSessionToken = t.sessionToken, this.accessibilityAvailable = t.accessibilityAvailable, this.name = t.fieldName, n = t.sessionToken;
+			}
+			let r = await this.client().issue(n, this.controller.signal);
 			if (e !== this.operation) return;
-			if (this.challenge = n, this.lastType = n.type, this.y = n.pieceTop ?? 0, this.status = "ready", this.readyAt = performance.now() + n.minimumDelayMs, this.setExpiry(n.expiresInMs - (performance.now() - t), e), n.work) {
-				if (this.working = !0, this.workNonce = await this.computeWork(n.work, this.controller.signal), e !== this.operation) return;
+			if (this.challenge = r, this.lastType = r.type, this.y = r.pieceTop ?? 0, this.status = "ready", this.readyAt = performance.now() + r.minimumDelayMs, this.setExpiry(r.expiresInMs - (performance.now() - t), e), r.work) {
+				if (this.working = !0, this.workNonce = await this.computeWork(r.work, this.controller.signal), e !== this.operation) return;
 				this.working = !1;
 			}
-			n.type === "pow" && e === this.operation && await this.verify();
+			r.type === "pow" && e === this.operation && await this.verify();
 		} catch (t) {
 			e === this.operation && this.showError(t);
 		}
 	}
 	computeWork(t, n) {
 		return new Promise((r, i) => {
-			let a = new Se();
+			let a = new ke();
 			this.worker = a;
 			let o, s = (t, s) => {
 				clearTimeout(o), n.removeEventListener("abort", c), a.terminate(), this.worker === a && (this.worker = void 0), s ? i(new e(s)) : r(t);
@@ -806,29 +898,34 @@ var Q = class extends Y {
 		return e === "slider" ? { x: this.x } : e === "drag" ? {
 			x: this.x,
 			y: this.y
-		} : e === "rotate" ? { angle: this.angle } : e === "click" ? { points: this.points } : { text: this.answerText };
+		} : e === "rotate" ? { angle: this.angle } : e === "click" ? { points: this.points } : e === "pow" ? {} : { text: this.answerText };
 	}
 	async verify() {
-		let e = this.challenge;
-		if (!e || this.status !== "ready" || this.disabled || this.working) return;
-		let t = this.operation;
+		let t = this.challenge;
+		if (!t || this.status !== "ready" || this.disabled || this.working) return;
+		let n = this.operation;
 		this.status = "verifying", this.errorCode = "";
 		try {
-			let n = this.readyAt - performance.now();
-			if (n > 0 && await new Promise((e) => setTimeout(e, n)), t !== this.operation) return;
-			let i = performance.now(), a = await new r(this.endpoint).solve(this.sessionToken, e.id, this.answer(), this.workNonce, this.controller?.signal);
-			if (t !== this.operation) return;
-			let o = a.expiresInMs - (performance.now() - i);
-			if (o <= 0) {
+			let r = this.readyAt - performance.now();
+			if (r > 0 && await new Promise((e) => setTimeout(e, r)), n !== this.operation) return;
+			let i = this.activeSessionToken;
+			if (!i) {
+				this.showError(new e("invalid_session"));
+				return;
+			}
+			let a = performance.now(), o = await this.client().solve(i, t.id, this.answer(), this.workNonce, this.controller?.signal);
+			if (n !== this.operation) return;
+			let s = o.expiresInMs - (performance.now() - a);
+			if (s <= 0) {
 				this.invalidate(), this.status = "expired", this.event("jervis-expired");
 				return;
 			}
-			this.proof = a.token, this.status = "success", this.challenge = void 0, this.internals?.setValidity({}), this.internals?.setFormValue(a.token), this.setExpiry(o, t), this.event("jervis-success", {
-				...a,
-				expiresInMs: o
+			this.proof = o.token, this.status = "success", this.challenge = void 0, this.internals?.setValidity({}), this.internals?.setFormValue(o.token), this.setExpiry(s, n), this.event("jervis-success", {
+				...o,
+				expiresInMs: s
 			});
 		} catch (e) {
-			t === this.operation && this.showError(e);
+			n === this.operation && this.showError(e);
 		}
 	}
 	move(e) {
@@ -862,58 +959,60 @@ var Q = class extends Y {
 		};
 	}
 	range(e, t, n) {
-		return R`<label>${t}<span class="range-value" aria-hidden="true">${this[e]}</span><input type="range" min="0" max=${n} step="1" .value=${String(this[e])} aria-label=${t} ?disabled=${this.disabled || this.status !== "ready"} @input=${(t) => {
+		return H`<label>${t}<span class="range-value" aria-hidden="true">${this[e]}</span><input type="range" min="0" max=${n} step="1" .value=${String(this[e])} aria-label=${t} ?disabled=${this.disabled || this.status !== "ready"} @input=${(t) => {
 			this[e] = Number(t.target.value);
 		}}/></label>`;
 	}
 	challengeView() {
 		let e = this.challenge;
-		if (!e) return B;
+		if (!e) return W;
 		let t = e.image && [
 			"slider",
 			"drag",
 			"click"
 		].includes(e.type), n = this.t[e.type] ?? e.prompt;
-		return R`
+		return H`
       <p class="prompt" id="instruction">${n}</p>
-      ${t ? R`<div class="board" role="group" aria-label=${n} tabindex=${e.type === "click" ? "0" : "-1"} @keydown=${this.keyboard} @pointerdown=${this.move} @pointermove=${this.move} @pointerup=${(e) => {
+      ${t ? H`<div class="board" role="group" aria-label=${n} tabindex=${e.type === "click" ? "0" : "-1"} @keydown=${this.keyboard} @pointerdown=${this.move} @pointermove=${this.move} @pointerup=${(e) => {
 			let t = e.currentTarget;
 			t.hasPointerCapture(e.pointerId) && t.releasePointerCapture(e.pointerId);
 		}}>
         <img src=${e.image} alt=${n} draggable="false"/>
-        ${e.piece ? R`<img class="piece" src=${e.piece} alt="" draggable="false" style=${`width:${(e.pieceSize ?? 44) / (e.width ?? 300) * 100}%;left:${this.x / (e.width ?? 300) * 100}%;top:${this.y / (e.height ?? 160) * 100}%`}/>` : B}
-        ${this.points.map((e, t) => R`<span class="point" style=${`left:${e.x / 3}%;top:${e.y / 1.6}%`}>${t + 1}</span>`)}
-        ${this.cursor ? R`<span class="cursor" style=${`left:${this.cursor.x / 3}%;top:${this.cursor.y / 1.6}%`}></span>` : B}
-      </div>` : B}
-      ${e.type === "text" ? R`<img class="text-image" src=${e.image} alt=${this.t.text}/>` : B}
-      ${e.type === "rotate" ? R`<div class="rotation"><img src=${e.image} alt=${this.t.rotate} style=${`transform:rotate(${this.angle}deg)`}/></div>${this.range("angle", this.t.angle, 359)}` : B}
-      ${["slider", "drag"].includes(e.type) ? this.range("x", this.t.horizontal, (e.width ?? 300) - (e.pieceSize ?? 44)) : B}
-      ${e.type === "drag" ? this.range("y", this.t.vertical, (e.height ?? 160) - (e.pieceSize ?? 44)) : B}
-      ${e.type === "click" ? R`<button type="button" @click=${() => {
+        ${e.piece ? H`<img class="piece" src=${e.piece} alt="" draggable="false" style=${`width:${(e.pieceSize ?? 44) / (e.width ?? 300) * 100}%;left:${this.x / (e.width ?? 300) * 100}%;top:${this.y / (e.height ?? 160) * 100}%`}/>` : W}
+        ${this.points.map((e, t) => H`<span class="point" style=${`left:${e.x / 3}%;top:${e.y / 1.6}%`}>${t + 1}</span>`)}
+        ${this.cursor ? H`<span class="cursor" style=${`left:${this.cursor.x / 3}%;top:${this.cursor.y / 1.6}%`}></span>` : W}
+      </div>` : W}
+      ${e.type === "text" ? H`<img class="text-image" src=${e.image} alt=${this.t.text}/>` : W}
+      ${e.type === "rotate" ? H`<div class="rotation"><img src=${e.image} alt=${this.t.rotate} style=${`transform:rotate(${this.angle}deg)`}/></div>${this.range("angle", this.t.angle, 359)}` : W}
+      ${["slider", "drag"].includes(e.type) ? this.range("x", this.t.horizontal, (e.width ?? 300) - (e.pieceSize ?? 44)) : W}
+      ${e.type === "drag" ? this.range("y", this.t.vertical, (e.height ?? 160) - (e.pieceSize ?? 44)) : W}
+      ${e.type === "click" ? H`<button type="button" @click=${() => {
 			this.points = [];
-		}} ?disabled=${this.disabled || this.status !== "ready"}>${this.t.clear} (${this.points.length}/3)</button>` : B}
-      ${["math", "logic"].includes(e.type) ? R`<div class="math">${e.prompt}</div>` : B}
-      ${e.audio ? R`<audio controls preload="none" src=${e.audio} aria-label=${this.t.audio}></audio>` : B}
+		}} ?disabled=${this.disabled || this.status !== "ready"}>${this.t.clear} (${this.points.length}/3)</button>` : W}
+      ${["math", "logic"].includes(e.type) ? H`<div class="math">${e.prompt}</div>` : W}
+      ${e.audio ? H`<audio controls preload="none" src=${e.audio} aria-label=${this.t.audio}></audio>` : W}
       ${[
 			"text",
 			"math",
 			"logic",
 			"audio"
-		].includes(e.type) ? R`<label>${this.t.answer}<input class="answer-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" dir="ltr" aria-describedby="instruction" .value=${this.answerText} ?disabled=${this.disabled || this.status !== "ready"} @input=${(e) => {
+		].includes(e.type) ? H`<label>${this.t.answer}<input class="answer-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" dir="ltr" aria-describedby="instruction" .value=${this.answerText} ?disabled=${this.disabled || this.status !== "ready"} @input=${(e) => {
 			this.answerText = e.target.value;
 		}} @keydown=${(e) => {
 			e.key === "Enter" && (e.preventDefault(), this.verify());
-		}}/></label>` : B}
+		}}/></label>` : W}
     `;
 	}
 	render() {
 		let e = this.presentation === "invisible" && (this.challenge?.type === "pow" || this.status === "success" && this.lastType === "pow") && this.status !== "error", t = this.errorCode ? this.t[this.errorCode] ?? this.t.error : "";
-		return R`<section part="container" class=${e ? "card hidden" : "card"} dir=${this.locale === "ar" ? "rtl" : "ltr"} aria-busy=${this.status === "loading" || this.status === "verifying"}>
+		return H`<section part="container" class=${e ? "card hidden" : "card"} dir=${this.locale === "ar" ? "rtl" : "ltr"} aria-busy=${this.status === "loading" || this.status === "verifying"}>
       <header><span class="mark" aria-hidden="true">J</span><div><h2>${this.t.title}</h2><small>${this.t.subtitle}</small></div></header>
-      ${this.status === "success" ? R`<div class="success" role="status">✓ ${this.t.success}</div>` : this.challengeView()}
-      ${this.status === "idle" && this.sessionToken ? R`<button class="primary" type="button" role=${this.presentation === "checkbox" ? "checkbox" : "button"} aria-checked=${this.presentation === "checkbox" ? "false" : B} @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.start}</button>` : B}
-      ${this.challenge && this.status === "ready" ? R`<div class="actions"><button class="primary" part="verify-button" type="button" @click=${() => this.verify()} ?disabled=${this.disabled || this.working || this.challenge.type === "pow"}>${this.t.verify}</button><button class="refresh" type="button" @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.refresh}</button></div>` : B}
-      <div class=${t ? "status error" : "status"} role="status" aria-live="polite">${this.working ? R`<span class="spinner"></span>${this.t.work}` : t || (this.status === "success" ? "" : this.t[this.status] ?? "")}</div>
+      ${this.status === "success" ? H`<div class="success" role="status">✓ ${this.t.success}</div>` : this.challengeView()}
+      ${this.status === "idle" && (this.activeSessionToken || this.action) ? H`<button class="primary" type="button" role=${this.presentation === "checkbox" ? "checkbox" : "button"} aria-checked=${this.presentation === "checkbox" ? "false" : W} @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.start}</button>` : W}
+      ${["expired", "error"].includes(this.status) && (this.action || this.sessionToken) ? H`<button class="primary" type="button" @click=${() => this.recover()} ?disabled=${this.disabled}>${this.t.retry}</button>` : W}
+      ${this.challenge && this.status === "ready" ? H`<div class="actions"><button class="primary" part="verify-button" type="button" @click=${() => this.verify()} ?disabled=${this.disabled || this.working || this.challenge.type === "pow"}>${this.t.verify}</button><button class="refresh" type="button" @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.refresh}</button></div>` : W}
+      ${this.canUseAccessibleChallenge ? H`<button class="refresh accessible" type="button" @click=${() => this.useAccessibleChallenge()} ?disabled=${this.disabled}>${this.t.accessible}</button>` : W}
+      <div class=${t ? "status error" : "status"} role="status" aria-live="polite">${this.working ? H`<span class="spinner"></span>${this.t.work}` : t || (this.status === "success" ? "" : this.t[this.status] ?? "")}</div>
       <footer><span>Jervis Captcha</span><span>${this.t.local}</span></footer>
     </section>`;
 	}
@@ -921,8 +1020,8 @@ var Q = class extends Y {
 //#endregion
 //#region web/src/index.ts
 function $() {
-	typeof customElements < "u" && !customElements.get("jervis-captcha") && customElements.define("jervis-captcha", Q);
+	typeof customElements < "u" && !customElements.get("jervis-captcha") && customElements.define("jervis-captcha", Ae);
 }
 $();
 //#endregion
-export { r as CaptchaClient, e as CaptchaError, Q as JervisCaptcha, $ as registerCaptcha };
+export { d as CaptchaClient, e as CaptchaError, Ae as JervisCaptcha, $ as registerCaptcha };

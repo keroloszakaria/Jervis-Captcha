@@ -5,6 +5,7 @@ namespace Jervis\Captcha\Tests;
 
 use Jervis\Captcha\Laravel\JervisCaptchaServiceProvider;
 use Jervis\Captcha\Laravel\Support\RequestLimiter;
+use Jervis\Captcha\Tests\Support\FixedBindingResolver;
 use Orchestra\Testbench\TestCase;
 
 final class SessionRequestBudgetTest extends TestCase
@@ -20,6 +21,7 @@ final class SessionRequestBudgetTest extends TestCase
         $app['config']->set('cache.default', 'array');
         $app['config']->set('session.driver', 'array');
         $app['config']->set('jervis-captcha.store', 'array');
+        $app['config']->set('jervis-captcha.binding_resolver', FixedBindingResolver::class);
         $app['config']->set('jervis-captcha.secret', str_repeat('s', 40));
         $app['config']->set('jervis-captcha.global_sessions_per_minute', 1000);
         $app['config']->set('jervis-captcha.default_policy', [

@@ -1,1 +1,0 @@
-Run npm run build to populate the embedded browser distribution before building the executable.
