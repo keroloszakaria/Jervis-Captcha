@@ -17,6 +17,7 @@ use Jervis\Captcha\Laravel\Commands\InstallCommand;
 use Jervis\Captcha\Laravel\Components\Captcha;
 use Jervis\Captcha\Laravel\Controllers\AssetController;
 use Jervis\Captcha\Laravel\Controllers\CaptchaController;
+use Jervis\Captcha\Laravel\Middleware\LimitCaptchaPayload;
 use Jervis\Captcha\Laravel\Middleware\VerifyCaptcha;
 use Jervis\Captcha\Laravel\Storage\LaravelCacheStore;
 use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
@@ -80,7 +81,8 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
                 ->where('file', 'jervis-captcha(?:-base)?\\.js')
                 ->name('jervis-captcha.asset');
 
-            Route::middleware($middleware)->group(function (): void {
+            $verificationMiddleware = array_values(array_unique([LimitCaptchaPayload::class, ...$middleware]));
+            Route::middleware($verificationMiddleware)->group(function (): void {
                 Route::post('/session/{action}', [CaptchaController::class, 'session'])->where('action', '[A-Za-z0-9._-]{1,64}')->name('jervis-captcha.session');
                 Route::post('/v1/challenges', [CaptchaController::class, 'challenge'])->name('jervis-captcha.challenge');
                 Route::post('/v1/answers', [CaptchaController::class, 'answer'])->name('jervis-captcha.answer');
