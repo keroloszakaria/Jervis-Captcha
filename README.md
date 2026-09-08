@@ -10,19 +10,19 @@ Laravel/PHP can run the verification engine in-process through `jervis/captcha`;
 
 | Area | Implementation |
 |---|---|
-| Challenges | Raster text, puzzle slider, free-drag puzzle, arrow rotation, ordered click, English digit audio, math, arithmetic sequences, bounded proof of work |
+| Challenges | Raster text, puzzle slider, free-drag puzzle, arrow rotation, ordered click, English digit audio in native mode, math, arithmetic sequences, bounded proof of work |
 | Presentation | Inline, checkbox entry, invisible for PoW; human challenges remain visible |
-| Trust model | Host-created sessions, site/action/session binding, server-owned policies, short-lived opaque proofs, atomic single-use consumption |
-| Persistence | Laravel lock-capable cache in embedded mode; SQLite WAL and compare-and-swap in native mode |
-| Browser UX | Arabic/English UI, RTL, light/dark/system themes, keyboard controls, form association, cancellation and expiry events |
+| Trust model | Host-created/managed sessions, action/session binding, server-owned policies, short-lived opaque proofs, atomic single-use consumption |
+| Persistence | Laravel lock-capable persistent cache in embedded mode; SQLite WAL and compare-and-swap in native mode |
+| Browser UX | Arabic/English UI, RTL, light/dark/system themes, keyboard controls, form association, cancellation, recovery and expiry events |
 | Integrations | `jervis/captcha` Composer package, `@jervis/captcha` browser package, plus generic HTTP/OpenAPI and Node/PHP/Python/.NET native-engine clients |
 | Deployment | In-process Laravel/PHP package or native executable; both can run without Internet access at runtime |
 
-Audio currently speaks **English digits**, including when the UI is Arabic. Math and logic are explicitly low-assurance types and cannot be enabled in an `isAntiAI` policy. PoW raises computational cost; it is not proof of a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
+Embedded PHP currently implements text, slider, drag, rotate, ordered click, math, logic and PoW. Audio remains available through the optional native engine until a local PHP audio implementation is added. Math and logic are explicitly low-assurance types and cannot be enabled in an `isAntiAI` policy. PoW raises computational cost; it is not proof of a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
 
 ## Embedded Laravel package
 
-Laravel can run Jervis Captcha entirely inside the application process: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; a separate `@jervis/captcha` package contains the framework-neutral browser widget.
+Laravel can run Jervis Captcha entirely inside the application process: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; `@jervis/captcha` contains the framework-neutral browser widget for SPA projects.
 
 ```bash
 composer require jervis/captcha
@@ -36,6 +36,18 @@ Route::post('/signup', SignupController::class)->middleware('jervis.captcha:sign
 ```blade
 <x-jervis-captcha action="signup" />
 ```
+
+For a same-origin SPA:
+
+```ts
+import '@jervis/captcha';
+```
+
+```html
+<jervis-captcha action="signup"></jervis-captcha>
+```
+
+That is the default integration surface. The package creates the verification session, generates the challenge, validates the answer and consumes the one-use proof. Set `endpoint` only when the Laravel application/package routes use a non-default base path.
 
 See [Embedded PHP / Laravel](docs/php-embedded.md). The Go/native engine remains available for non-PHP and centralized deployments.
 
@@ -61,13 +73,10 @@ Open `http://127.0.0.1:8090`. Complete a challenge and click **Submit protected 
 
 ## Build from source
 
-Build prerequisites: Go 1.26.8, Node 22.12+ and npm. The first bootstrap also requires Python 3 and eSpeak **only if the generated audio file is absent**. Verified CI commits the generated assets and lockfiles on the implementation branch; subsequent builds use them.
+Build prerequisites: Go 1.26.8, Node 22.12+ and npm. The first native bootstrap also requires Python 3 and eSpeak **only if the generated native audio file is absent**. Verified native CI commits generated assets and lockfiles on implementation branches; subsequent builds use them.
 
 ```sh
-# Initial checkout without a lockfile: npm install. Thereafter:
 npm ci
-# Only when internal/captcha/audio_samples.go is absent:
-python3 scripts/audio-pack.py
 npm run validate:web
 go mod download
 go test -race ./...
@@ -75,7 +84,9 @@ go vet ./...
 go build -trimpath -o jervis-captcha ./cmd/jervis-captcha
 ```
 
-A connected **build host** resolves dependencies. A released executable needs no dependency installer or connection. For an offline source rebuild, additionally transfer the exact Go toolchain, module cache/vendor directory, Node/npm cache and pinned dependencies; a git checkout alone is not an offline build kit.
+For embedded packages, `npm run build` produces the browser package artifact used by both Composer and npm distributions, and `python3 scripts/package-embedded.py` creates offline Composer/npm-compatible archives after validation.
+
+A connected **build host** resolves dependencies. Released runtime artifacts need no runtime dependency installer or Internet connection. For an offline source rebuild, additionally transfer the exact toolchains/caches or an internal dependency repository; a git checkout alone is not an offline build kit.
 
 ## Integration modes
 
@@ -91,7 +102,7 @@ The consuming Laravel project does not create CAPTCHA session endpoints or call 
 Route::post('/signup', SignupController::class)->middleware('jervis.captcha:signup');
 ```
 
-For a SPA using the same Laravel backend, import `@jervis/captcha` and render `<jervis-captcha action="signup" endpoint="/jervis-captcha/">`. The widget bootstraps its package-managed session automatically.
+For a same-origin SPA, import `@jervis/captcha` and render `<jervis-captcha action="signup"></jervis-captcha>`. Managed session creation is intentionally same-origin. The default endpoint is `/jervis-captcha/`; override it only for a custom base path/prefix.
 
 ### Native/universal engine
 
@@ -99,8 +110,19 @@ Non-PHP or centralized deployments keep the explicit host-backend contract: the 
 
 Keep normal authentication, CSRF protection, authorization, business rate limits and transaction idempotency. CAPTCHA is an additional control, not a replacement.
 
+## Offline package delivery
+
+The focused embedded pipeline is designed to produce:
+
+- `jervis-captcha-php-0.2.0-alpha.1.zip` for a local Composer artifact repository.
+- `jervis-captcha-frontend-0.2.0-alpha.1.tgz` for local npm installation.
+- `manifest.json` and `SHA256SUMS` for integrity/import workflows.
+
+See [Embedded PHP / Laravel](docs/php-embedded.md) for air-gapped installation details. Signed release artifacts remain a production release gate.
+
 ## Documentation and evidence
 
+- [Embedded PHP / Laravel](docs/php-embedded.md)
 - [Quick start and deployment](docs/quickstart.md)
 - [API and OpenAPI](docs/api.md) / [machine-readable contract](docs/openapi.json)
 - [Browser/framework integration](docs/integrations.md)
