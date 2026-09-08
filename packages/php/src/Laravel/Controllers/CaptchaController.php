@@ -16,7 +16,18 @@ final class CaptchaController extends Controller
     public function session(Request $request, string $action, EmbeddedEngine $engine, BindingResolver $binding): JsonResponse
     {
         if (!$engine->actionExists($action)) return response()->json(['code' => 'invalid_context'], 404);
-        return $this->run(fn () => $engine->createSession($action, $binding->resolve($request)));
+        $request->validate([
+            'variant' => ['sometimes', 'string', 'in:standard,accessible'],
+            'type' => ['prohibited'],
+            'policy' => ['prohibited'],
+            'binding' => ['prohibited'],
+            'isAntiAI' => ['prohibited'],
+        ]);
+        return $this->run(fn () => $engine->createSession(
+            $action,
+            $binding->resolve($request),
+            (string) $request->input('variant', 'standard'),
+        ));
     }
 
     public function challenge(Request $request, EmbeddedEngine $engine, BindingResolver $binding, RequestLimiter $limiter): JsonResponse
