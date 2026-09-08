@@ -14,7 +14,7 @@ use Jervis\Captcha\Laravel\Support\RequestLimiter;
 
 final class CaptchaController extends Controller
 {
-    public function session(Request $request, string $action, EmbeddedEngine $engine, BindingResolver $binding): JsonResponse
+    public function session(Request $request, string $action, EmbeddedEngine $engine, BindingResolver $binding, RequestLimiter $limiter): JsonResponse
     {
         if (!$engine->actionExists($action)) return response()->json(['code' => 'invalid_context'], 404);
         $request->validate([
@@ -24,10 +24,12 @@ final class CaptchaController extends Controller
             'binding' => ['prohibited'],
             'isAntiAI' => ['prohibited'],
         ]);
-        return $this->run(function () use ($request, $action, $engine, $binding): array {
+        return $this->run(function () use ($request, $action, $engine, $binding, $limiter): array {
+            $resolvedBinding = $binding->resolve($request);
+            $limiter->assertAllowed('session', $resolvedBinding);
             $result = $engine->createSession(
                 $action,
-                $binding->resolve($request),
+                $resolvedBinding,
                 (string) $request->input('variant', 'standard'),
             );
             $result['fieldName'] = EmbeddedConfig::fieldName();
