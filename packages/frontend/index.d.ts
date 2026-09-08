@@ -19,7 +19,7 @@ export interface Challenge {
   work?: Work;
 }
 export interface Proof { token: string; expiresInMs: number }
-export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean }
+export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean; fieldName: string }
 
 export declare class CaptchaError extends Error {
   readonly code: string;
