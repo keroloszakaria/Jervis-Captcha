@@ -47,6 +47,9 @@ final class EmbeddedEngine
                 continue;
             }
             $override = (array) $policy;
+            if ($this->defaultPolicy === null && !Policy::completeArray($override)) {
+                throw new \InvalidArgumentException('Action-only CAPTCHA policies must define every policy field');
+            }
             $base = $this->defaultPolicy?->toArray() ?? [];
             $this->actions[$action] = Policy::fromArray(array_replace($base, $override));
         }
