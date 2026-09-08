@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Jervis\Captcha\Tests;
 
 use Illuminate\Support\Facades\Blade;
+use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Laravel\JervisCaptchaServiceProvider;
 use Jervis\Captcha\Laravel\Support\RequestLimiter;
 use Orchestra\Testbench\TestCase;
@@ -43,6 +44,9 @@ final class LaravelIntegrationTest extends TestCase
     {
         $session = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json();
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $session['sessionToken']);
+        self::assertTrue($session['accessibilityAvailable']);
+        self::assertArrayNotHasKey('policy', $session);
+        self::assertArrayNotHasKey('types', $session);
 
         $challenge = $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $session['sessionToken']])->assertOk()->json();
         self::assertSame('pow', $challenge['type']);
@@ -55,6 +59,57 @@ final class LaravelIntegrationTest extends TestCase
 
         $this->postJson('/protected', ['jervisCaptchaToken' => $proof['token']])->assertOk()->assertJson(['accepted' => true]);
         $this->postJson('/protected', ['jervisCaptchaToken' => $proof['token']])->assertStatus(422);
+    }
+
+    public function testAccessibleVariantUsesServerOwnedAudioPoolAndProducesAUsableProof(): void
+    {
+        $session = $this->postJson('/jervis-captcha/session/signup', ['variant' => 'accessible'])->assertOk()->json();
+        self::assertTrue($session['accessibilityAvailable']);
+
+        $challenge = $this->postJson('/jervis-captcha/v1/challenges', ['sessionToken' => $session['sessionToken']])->assertOk()->json();
+        self::assertSame('audio', $challenge['type']);
+        self::assertMatchesRegularExpression('/^data:audio\/wav;base64,[A-Za-z0-9+\/=]+$/', $challenge['audio']);
+        self::assertArrayNotHasKey('expected', $challenge);
+
+        $state = app(Store::class)->get(hash('sha256', $session['sessionToken']));
+        self::assertIsArray($state);
+        self::assertSame('accessible', $state['variant']);
+        self::assertSame('audio', $state['type']);
+        $answer = (string) ($state['expected']['text'] ?? '');
+        self::assertMatchesRegularExpression('/^[0-9]{5}$/', $answer);
+
+        $proof = $this->postJson('/jervis-captcha/v1/answers', [
+            'sessionToken' => $session['sessionToken'],
+            'challengeId' => $challenge['id'],
+            'answer' => ['text' => $answer],
+        ])->assertOk()->json();
+        $this->postJson('/protected', ['jervisCaptchaToken' => $proof['token']])->assertOk();
+    }
+
+    public function testBrowserCannotForceChallengeTypeOrTrustInputs(): void
+    {
+        foreach ([
+            ['type' => 'pow'],
+            ['binding' => str_repeat('x', 20)],
+            ['isAntiAI' => false],
+            ['policy' => ['types' => ['pow']]],
+            ['variant' => 'audio'],
+        ] as $payload) {
+            $this->postJson('/jervis-captcha/session/signup', $payload)->assertStatus(422);
+        }
+    }
+
+    public function testActionCanDisableAccessibleVariantEntirely(): void
+    {
+        $policy = (array) config('jervis-captcha.default_policy');
+        $policy['accessibilityTypes'] = [];
+        $this->app['config']->set('jervis-captcha.default_policy', $policy);
+
+        $standard = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json();
+        self::assertFalse($standard['accessibilityAvailable']);
+        $this->postJson('/jervis-captcha/session/signup', ['variant' => 'accessible'])
+            ->assertStatus(400)
+            ->assertJson(['code' => 'accessibility_unavailable']);
     }
 
     public function testProofForAnotherActionCannotPassMiddleware(): void
