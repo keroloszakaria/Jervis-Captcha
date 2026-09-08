@@ -52,7 +52,7 @@ if ($mode === 'prepare') {
     $challenge = $engine->issue($session['sessionToken'], $binding);
     $nonce = solveWork((string) $challenge['work']['seed'], (int) $challenge['work']['bits']);
     $proof = $engine->solve($session['sessionToken'], $binding, (string) $challenge['id'], [], $nonce);
-    fwrite(STDOUT, $proof['token']);
+    fwrite(STDOUT, $proof['token'] . PHP_EOL);
     exit(0);
 }
 
@@ -63,11 +63,11 @@ if ($mode === 'consume') {
     }
     try {
         $engine->consume($token, 'race', $binding);
-        fwrite(STDOUT, 'consumed');
+        fwrite(STDOUT, "consumed\n");
         exit(0);
     } catch (CaptchaException $e) {
         if ($e->errorCode === 'invalid_proof') {
-            fwrite(STDOUT, 'rejected');
+            fwrite(STDOUT, "rejected\n");
             exit(2);
         }
         fwrite(STDERR, $e->errorCode . PHP_EOL);
