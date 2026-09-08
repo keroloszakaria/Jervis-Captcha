@@ -15,7 +15,8 @@ final class DoctorCommand extends Command
 
     public function handle(Store $store): int
     {
-        $asset = dirname(__DIR__, 3) . '/resources/dist/jervis-captcha.js';
+        $browserAsset = dirname(__DIR__, 3) . '/resources/dist/jervis-captcha.js';
+        $audioAsset = dirname(__DIR__, 3) . '/resources/audio/digits.asset';
         $cacheStore = (string) (config('jervis-captcha.store') ?: config('cache.default', ''));
         $secret = (string) config('jervis-captcha.secret', '');
 
@@ -38,12 +39,14 @@ final class DoctorCommand extends Command
             'PHP >= 8.2' => PHP_VERSION_ID >= 80200,
             'GD extension' => extension_loaded('gd'),
             'hash extension' => extension_loaded('hash'),
+            'zlib extension' => function_exists('gzdecode'),
             'secure random' => function_exists('random_bytes'),
             'secret >= 32 bytes' => strlen($secret) >= 32,
             'engine configuration' => $engineReady,
             'request budgets' => RequestLimiter::configurationValid(),
             'persistent cache + lock' => $cacheReady,
-            'browser asset' => is_file($asset) && filesize($asset) > 1000,
+            'browser asset' => is_file($browserAsset) && filesize($browserAsset) > 1000,
+            'digit audio asset' => is_file($audioAsset) && filesize($audioAsset) > 10000,
         ];
 
         foreach ($checks as $label => $ok) {
