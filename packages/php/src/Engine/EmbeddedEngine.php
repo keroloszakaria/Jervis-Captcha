@@ -209,7 +209,7 @@ final class EmbeddedEngine
     private function answerValid(string $type, array $want, array $got): bool
     {
         if ($type === 'pow') return true;
-        if (in_array($type, ['text', 'math', 'logic'], true)) {
+        if (in_array($type, ['text', 'audio', 'math', 'logic'], true)) {
             return hash_equals($this->normalize((string) ($want['text'] ?? '')), $this->normalize((string) ($got['text'] ?? '')));
         }
         if ($type === 'slider') return is_numeric($got['x'] ?? null) && abs((float) $want['x'] - (float) $got['x']) <= 5;
