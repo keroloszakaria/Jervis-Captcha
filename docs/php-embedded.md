@@ -4,7 +4,7 @@ Jervis Captcha can run **inside the Laravel PHP process**. This mode does not st
 
 ## Intended Laravel usage
 
-The repository root also contains the Composer package manifest, so a tagged/released repository can be consumed as `jervis/captcha`; `packages/php/composer.json` mirrors the PHP subtree for a future split package repository.
+The repository root also contains the Composer package manifest, so a tagged/released repository can be consumed as `jervis/captcha`; `packages/php/composer.json` mirrors the PHP subtree for a future split package repository. The package supports Laravel 11, 12 and 13 with PHP 8.2+; the CI matrix resolves each Laravel generation against its matching Orchestra Testbench generation.
 
 ```bash
 composer require jervis/captcha
@@ -84,13 +84,21 @@ These limits supplement normal application/WAF/rate-limiter controls; they do no
 
 The default Laravel adapter uses the application's Cache Manager plus Laravel atomic locks. A proof is consumed under the same session-state lock, so two concurrent requests cannot both consume it. On multi-node deployments, all nodes must use the same shared lock-capable cache backend. Do not use independent local cache stores across nodes.
 
-`php artisan jervis-captcha:doctor` checks PHP/GD, secure randomness, engine configuration, request budgets, browser assets and a real persistent cache lock before deployment. The Laravel `array` and `null` cache stores are rejected because CAPTCHA state has to survive across requests.
+`php artisan jervis-captcha:doctor` checks PHP/GD/zlib, secure randomness, engine configuration, request budgets, the embedded digit-audio asset, browser assets and a real persistent cache lock before deployment. The Laravel `array` and `null` cache stores are rejected because CAPTCHA state has to survive across requests.
+
+## Embedded audio
+
+The PHP package now uses the **same generated English digit PCM samples** as the native Go engine. During the canonical build, `scripts/copy-assets.mjs` copies the generated native audio payload into `packages/php/resources/audio/digits.asset`. PHP decodes the local gzip/JSON payload and assembles an 8 kHz mono WAV on the server.
+
+The browser receives only the final `data:audio/wav;base64,...` payload. It does not receive the answer text for browser TTS, and there is no CDN, speech API or runtime synthesizer dependency. Arabic-UI users may enter either Arabic or Western numerals because the verifier normalizes both, but the spoken audio is English digits in this release.
+
+Audio is an accessibility/alternative modality, not an anti-AI guarantee; speech-to-text systems can solve audio challenges. `isAntiAI` may still apply the package's bounded proof-of-work layer, but product documentation must not claim that this makes audio AI-proof.
 
 ## Air-gapped package delivery
 
 A successful embedded-package CI run builds two runtime archives from the exact browser artifact accepted by the PHP/Laravel tests:
 
-- `jervis-captcha-php-<version>.zip` — Composer-compatible PHP package contents with the embedded browser asset.
+- `jervis-captcha-php-<version>.zip` — Composer-compatible PHP package contents with the embedded browser and digit-audio assets.
 - `jervis-captcha-frontend-<version>.tgz` — npm-compatible frontend package for SPA projects.
 - `manifest.json` and `SHA256SUMS` — release metadata and integrity hashes.
 
@@ -126,6 +134,6 @@ No CDN or remote runtime download is required after deployment. Verify `SHA256SU
 
 ## Embedded challenge scope
 
-The initial PHP engine implements text raster, slider, free drag, rotation, ordered click, math, logic and bounded proof-of-work. Audio remains available in the native Go engine but is not claimed for the embedded PHP engine until a locally packaged PHP audio implementation is added.
+The embedded PHP engine implements text raster, slider, free drag, rotation, ordered click, English digit audio, math, logic and bounded proof-of-work.
 
 `isAntiAI` remains an experimental hardening profile. It is not a claim that a challenge is AI-proof.
