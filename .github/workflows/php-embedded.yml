@@ -66,12 +66,17 @@ jobs:
           test -s packages/frontend/dist/jervis-captcha.js
           test -s packages/frontend/dist/index.d.ts
           npm pack ./packages/frontend --dry-run
+      - name: Stage artifacts with stable repository-relative paths
+        shell: bash
+        run: |
+          rm -rf .embedded-package-assets
+          mkdir -p .embedded-package-assets/packages/php/resources .embedded-package-assets/packages/frontend
+          cp -a packages/php/resources/dist .embedded-package-assets/packages/php/resources/dist
+          cp -a packages/frontend/dist .embedded-package-assets/packages/frontend/dist
       - uses: actions/upload-artifact@v4
         with:
           name: embedded-package-assets
-          path: |
-            packages/php/resources/dist/
-            packages/frontend/dist/
+          path: .embedded-package-assets/
           retention-days: 3
           if-no-files-found: error
 
@@ -99,6 +104,8 @@ jobs:
           cp -a .embedded-assets/packages/php/resources/dist/. packages/php/resources/dist/
           cp -a .embedded-assets/packages/frontend/dist/. packages/frontend/dist/
           test -s packages/php/resources/dist/jervis-captcha.js
+          test -s packages/frontend/dist/jervis-captcha.js
+          test -s packages/frontend/dist/index.d.ts
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
