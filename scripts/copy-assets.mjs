@@ -1,5 +1,9 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+
+// Native/demo distribution keeps the browser playground alongside the compiled
+// widget. Package distributions below intentionally receive runtime files only.
 await cp('web/public', 'internal/web/dist', { recursive: true });
+
 // These are the Lit packages bundled by the browser build. The Node-only
 // ssr-dom-shim is not part of the browser distribution.
 const packages = ['lit', 'lit-element', 'lit-html', '@lit/reactive-element'];
@@ -10,10 +14,18 @@ for (const name of packages) {
   notice += `--- ${name}@${json.version} ---\n${license}\n\n`;
 }
 await writeFile('internal/web/dist/THIRD_PARTY_NOTICES.txt', notice);
-for (const destination of ['dist/web', 'packages/php/resources/dist', 'packages/frontend/dist']) {
+
+await rm('dist/web', { recursive: true, force: true });
+await mkdir('dist/web', { recursive: true });
+await cp('internal/web/dist', 'dist/web', { recursive: true });
+
+const runtimeFiles = ['jervis-captcha.js', 'THIRD_PARTY_NOTICES.txt'];
+for (const destination of ['packages/php/resources/dist', 'packages/frontend/dist']) {
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
-  await cp('internal/web/dist', destination, { recursive: true });
+  for (const file of runtimeFiles) {
+    await cp(`internal/web/dist/${file}`, `${destination}/${file}`);
+  }
 }
 await cp('packages/frontend/index.d.ts', 'packages/frontend/dist/index.d.ts');
 
