@@ -9,16 +9,19 @@ export interface Challenge {
   expiresInMs: number; minimumDelayMs: number; work?: Work;
 }
 export interface Proof { token: string; expiresInMs: number }
-export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean }
+export interface CaptchaSession { sessionToken: string; expiresInMs: number; accessibilityAvailable: boolean; fieldName: string }
 export class CaptchaError extends Error {
   constructor(public readonly code: string, public readonly status = 0) { super(code); this.name = 'CaptchaError'; }
 }
+const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
+const fieldPattern = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 const kinds = new Set(['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow']);
 function validChallenge(c: Challenge): boolean {
-  return !!c && typeof c.id === 'string' && c.id.length === 43 && kinds.has(c.type)
+  return !!c && typeof c.id === 'string' && tokenPattern.test(c.id) && kinds.has(c.type)
+    && typeof c.prompt === 'string' && c.prompt.length > 0 && c.prompt.length <= 500
     && Number.isFinite(c.expiresInMs) && c.expiresInMs > 0 && c.expiresInMs <= 900_000
     && Number.isFinite(c.minimumDelayMs) && c.minimumDelayMs >= 0 && c.minimumDelayMs <= 10_000
-    && (!c.work || (typeof c.work.seed === 'string' && c.work.seed.length === 43 && Number.isInteger(c.work.bits) && c.work.bits >= 1 && c.work.bits <= 20))
+    && (!c.work || (tokenPattern.test(c.work.seed) && Number.isInteger(c.work.bits) && c.work.bits >= 1 && c.work.bits <= 20))
     && (!c.image || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.image))
     && (!c.piece || /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.piece))
     && (!c.audio || /^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(c.audio));
@@ -49,9 +52,9 @@ export class CaptchaClient {
     try {
       const target = new URL(path, this.base);
       const headers = { 'Content-Type': 'application/json', ...csrfHeader(target, this.csrfToken) };
-      // `same-origin` lets an embedded Laravel package receive its own session
-      // cookie while still refusing browser credentials on cross-origin calls.
       const r = await this.transport.call(globalThis, target, { method: 'POST', credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers, body: JSON.stringify(body), signal: controller.signal });
+      const contentLength = Number(r.headers.get('content-length') ?? '0');
+      if (Number.isFinite(contentLength) && contentLength > 1_000_000) throw new CaptchaError('invalid_response', r.status);
       const text = await r.text();
       if (text.length > 1_000_000) throw new CaptchaError('invalid_response', r.status);
       let data: T & { code?: string };
@@ -67,17 +70,21 @@ export class CaptchaClient {
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(action) || !['standard', 'accessible'].includes(variant)) throw new CaptchaError('invalid_context');
     if (typeof location !== 'undefined' && this.base.origin !== location.origin) throw new CaptchaError('managed_session_requires_same_origin');
     const session = await this.post<CaptchaSession>(`session/${encodeURIComponent(action)}`, { variant }, signal);
-    if (!session || typeof session.sessionToken !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(session.sessionToken)
+    if (!session || typeof session.sessionToken !== 'string' || !tokenPattern.test(session.sessionToken)
       || !Number.isFinite(session.expiresInMs) || session.expiresInMs <= 0 || session.expiresInMs > 900_000
-      || typeof session.accessibilityAvailable !== 'boolean') throw new CaptchaError('invalid_response');
+      || typeof session.accessibilityAvailable !== 'boolean' || typeof session.fieldName !== 'string' || !fieldPattern.test(session.fieldName)) {
+      throw new CaptchaError('invalid_response');
+    }
     return session;
   }
   async issue(sessionToken: string, signal?: AbortSignal): Promise<Challenge> {
+    if (!tokenPattern.test(sessionToken)) throw new CaptchaError('invalid_session');
     const challenge = await this.post<Challenge>('v1/challenges', { sessionToken }, signal);
     if (!validChallenge(challenge)) throw new CaptchaError('invalid_response');
     return challenge;
   }
   async solve(sessionToken: string, challengeId: string, answer: Answer, workNonce?: string, signal?: AbortSignal): Promise<Proof> {
+    if (!tokenPattern.test(sessionToken) || !tokenPattern.test(challengeId)) throw new CaptchaError('invalid_challenge');
     const proof = await this.post<Proof>('v1/answers', { sessionToken, challengeId, answer, workNonce }, signal);
     if (!proof || typeof proof.token !== 'string' || !/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/.test(proof.token) || !Number.isFinite(proof.expiresInMs) || proof.expiresInMs <= 0 || proof.expiresInMs > 120_000) throw new CaptchaError('invalid_response');
     return proof;
