@@ -9,6 +9,11 @@ use Jervis\Captcha\Contracts\Store;
 final readonly class RequestLimiter
 {
     private const OPERATIONS = ['challenge', 'answer'];
+    private const DEFAULTS = [
+        'global_per_minute' => 5000,
+        'challenge_per_binding_per_minute' => 30,
+        'answer_per_binding_per_minute' => 60,
+    ];
 
     public function __construct(private Store $store) {}
 
@@ -19,12 +24,8 @@ final readonly class RequestLimiter
         }
 
         $limits = (array) config('jervis-captcha.request_limits', []);
-        $global = $this->limit($limits, 'global_per_minute', 5000);
-        $perBinding = $this->limit(
-            $limits,
-            $operation . '_per_binding_per_minute',
-            $operation === 'challenge' ? 30 : 60,
-        );
+        $global = $this->limit($limits, 'global_per_minute');
+        $perBinding = $this->limit($limits, $operation . '_per_binding_per_minute');
 
         $bindingKey = hash('sha256', $binding);
         if (!$this->store->rateLimit('request:global', $global, 60)
@@ -33,9 +34,20 @@ final readonly class RequestLimiter
         }
     }
 
-    /** @param array<string,mixed> $limits */
-    private function limit(array $limits, string $key, int $default): int
+    public static function configurationValid(): bool
     {
+        $limits = (array) config('jervis-captcha.request_limits', []);
+        foreach (self::DEFAULTS as $key => $default) {
+            $value = array_key_exists($key, $limits) ? (int) $limits[$key] : $default;
+            if ($value < 1 || $value > 100000) return false;
+        }
+        return true;
+    }
+
+    /** @param array<string,mixed> $limits */
+    private function limit(array $limits, string $key): int
+    {
+        $default = self::DEFAULTS[$key] ?? throw new \InvalidArgumentException('Unknown CAPTCHA request budget');
         $value = array_key_exists($key, $limits) ? (int) $limits[$key] : $default;
         if ($value < 1 || $value > 100000) {
             throw new CaptchaException('verification_unavailable', 503);
