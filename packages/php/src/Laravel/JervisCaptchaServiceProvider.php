@@ -19,6 +19,7 @@ use Jervis\Captcha\Laravel\Controllers\AssetController;
 use Jervis\Captcha\Laravel\Controllers\CaptchaController;
 use Jervis\Captcha\Laravel\Middleware\VerifyCaptcha;
 use Jervis\Captcha\Laravel\Storage\LaravelCacheStore;
+use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
 use Jervis\Captcha\Laravel\Support\LaravelSessionBinding;
 
 final class JervisCaptchaServiceProvider extends ServiceProvider
@@ -68,8 +69,8 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
 
     private function routes(): void
     {
-        $prefix = trim((string) config('jervis-captcha.routes.prefix', 'jervis-captcha'), '/');
-        $middleware = (array) config('jervis-captcha.routes.middleware', ['web']);
+        $prefix = EmbeddedConfig::routePrefix();
+        $middleware = EmbeddedConfig::routeMiddleware();
         Route::prefix($prefix)->middleware($middleware)->group(function (): void {
             Route::post('/session/{action}', [CaptchaController::class, 'session'])->where('action', '[A-Za-z0-9._-]{1,64}')->name('jervis-captcha.session');
             Route::post('/v1/challenges', [CaptchaController::class, 'challenge'])->name('jervis-captcha.challenge');
