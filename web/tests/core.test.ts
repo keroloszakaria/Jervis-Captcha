@@ -35,14 +35,15 @@ describe('public browser client', () => {
     await expect(client.createSession('../admin')).rejects.toMatchObject({ code: 'invalid_context' });
     expect(mock).toHaveBeenCalledTimes(1);
   });
-  it('forwards CSRF only to the current origin', async () => {
+  it('sends CSRF to same-origin embedded routes and rejects cross-origin managed bootstrap', async () => {
     const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ sessionToken: token, expiresInMs: 300000 }));
     vi.stubGlobal('location', new URL('https://intranet.test/form'));
     await new CaptchaClient('/jervis-captcha/', mock, 'csrf-value').createSession('signup');
     expect((mock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ 'X-CSRF-TOKEN': 'csrf-value' });
     mock.mockClear();
-    await new CaptchaClient('https://other.test/jervis-captcha/', mock, 'csrf-value').createSession('signup');
-    expect((mock.mock.calls[0]![1] as RequestInit).headers).not.toHaveProperty('X-CSRF-TOKEN');
+    await expect(new CaptchaClient('https://other.test/jervis-captcha/', mock, 'csrf-value').createSession('signup'))
+      .rejects.toMatchObject({ code: 'managed_session_requires_same_origin' });
+    expect(mock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
   it('rejects dangerous endpoint schemes and embedded credentials', () => {
