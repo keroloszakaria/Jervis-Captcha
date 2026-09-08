@@ -10,9 +10,9 @@ use PHPUnit\Framework\TestCase;
 
 final class EngineTest extends TestCase
 {
-    private function engine(string $type = 'pow'): EmbeddedEngine
+    private function engine(string $type = 'pow', ?MemoryStore $store = null): EmbeddedEngine
     {
-        return new EmbeddedEngine(new MemoryStore(), str_repeat('s', 40), [], [
+        return new EmbeddedEngine($store ?? new MemoryStore(), str_repeat('s', 40), [], [
             'types' => [$type], 'isAntiAI' => false,
             'workBits' => $type === 'pow' ? 12 : 0, 'minSolveMs' => 0, 'sessionTtlSeconds' => 60,
             'challengeTtlSeconds' => 30, 'proofTtlSeconds' => 30, 'maxAttempts' => 3,
@@ -25,6 +25,48 @@ final class EngineTest extends TestCase
         $engine = $this->engine();
         self::assertTrue($engine->actionExists('signup')); self::assertTrue($engine->actionExists('password.reset'));
         self::assertFalse($engine->actionExists('../admin')); self::assertFalse($engine->actionExists(''));
+    }
+
+    public function testEveryEmbeddedChallengeTypeCompletesEndToEnd(): void
+    {
+        foreach (['text', 'slider', 'drag', 'rotate', 'click', 'math', 'logic', 'pow'] as $type) {
+            $store = new MemoryStore();
+            $engine = $this->engine($type, $store);
+            $binding = str_repeat('b', 20);
+            $session = $engine->createSession('signup', $binding);
+            $challenge = $engine->issue($session['sessionToken'], $binding);
+
+            self::assertSame($type, $challenge['type']);
+            self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $challenge['id']);
+            self::assertArrayNotHasKey('expected', $challenge);
+            self::assertGreaterThan(0, $challenge['expiresInMs']);
+
+            $state = $store->get(hash('sha256', $session['sessionToken']));
+            self::assertIsArray($state);
+            $answer = (array) ($state['expected'] ?? []);
+            $nonce = null;
+            if (isset($challenge['work'])) {
+                $nonce = $this->solveWork((string) $challenge['work']['seed'], (int) $challenge['work']['bits']);
+            }
+
+            $proof = $engine->solve($session['sessionToken'], $binding, $challenge['id'], $answer, $nonce);
+            self::assertMatchesRegularExpression('/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/', $proof['token']);
+            self::assertTrue($engine->consume($proof['token'], 'signup', $binding));
+        }
+    }
+
+    public function testOrderedClickTargetsRemainSeparated(): void
+    {
+        if (!extension_loaded('gd')) self::markTestSkipped('GD is required by the visual package and installed in package CI.');
+        for ($sample = 0; $sample < 40; $sample++) {
+            $store = new MemoryStore(); $engine = $this->engine('click', $store); $binding = str_repeat('b', 20);
+            $session = $engine->createSession('signup', $binding); $engine->issue($session['sessionToken'], $binding);
+            $state = $store->get(hash('sha256', $session['sessionToken'])); $points = $state['expected']['points'] ?? [];
+            self::assertCount(3, $points);
+            for ($a = 0; $a < 3; $a++) for ($b = $a + 1; $b < 3; $b++) {
+                self::assertGreaterThanOrEqual(58.0, hypot($points[$a]['x'] - $points[$b]['x'], $points[$a]['y'] - $points[$b]['y']));
+            }
+        }
     }
 
     public function testPowProofIsOneUseAndBindingScoped(): void
