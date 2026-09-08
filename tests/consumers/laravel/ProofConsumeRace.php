@@ -5,14 +5,25 @@ use Illuminate\Contracts\Console\Kernel;
 use Jervis\Captcha\CaptchaException;
 use Jervis\Captcha\Engine\EmbeddedEngine;
 
-require dirname(__DIR__, 3) . '/vendor/autoload.php';
-$app = require dirname(__DIR__, 3) . '/bootstrap/app.php';
+$root = rtrim((string) (getenv('JERVIS_CONSUMER_ROOT') ?: getcwd()), DIRECTORY_SEPARATOR);
+if (!is_file($root . '/vendor/autoload.php') || !is_file($root . '/bootstrap/app.php')) {
+    fwrite(STDERR, "JERVIS_CONSUMER_ROOT must point to an installed Laravel application\n");
+    exit(65);
+}
+
+require $root . '/vendor/autoload.php';
+$app = require $root . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
 $store = $argv[1] ?? 'file';
 $mode = $argv[2] ?? '';
 $token = $argv[3] ?? '';
 $binding = 'jervis-consumer-race-binding-0001';
+
+if (!in_array($store, ['file', 'redis'], true)) {
+    fwrite(STDERR, "Store must be file or redis\n");
+    exit(64);
+}
 
 config()->set('cache.default', $store);
 config()->set('jervis-captcha.store', $store);
@@ -46,6 +57,10 @@ if ($mode === 'prepare') {
 }
 
 if ($mode === 'consume') {
+    if (!preg_match('/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/D', $token)) {
+        fwrite(STDERR, "Invalid proof token\n");
+        exit(64);
+    }
     try {
         $engine->consume($token, 'race', $binding);
         fwrite(STDOUT, 'consumed');
