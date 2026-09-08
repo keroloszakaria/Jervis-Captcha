@@ -54,9 +54,12 @@ final readonly class VerifyCaptcha
 
     private function unavailable(Request $request, string $field): Response
     {
-        return response()->json([
-            'message' => 'CAPTCHA verification is temporarily unavailable',
-            'errors' => [$field => ['CAPTCHA verification is temporarily unavailable.']],
-        ], 503);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'CAPTCHA verification is temporarily unavailable',
+                'errors' => [$field => ['CAPTCHA verification is temporarily unavailable.']],
+            ], 503);
+        }
+        return response('CAPTCHA verification is temporarily unavailable.', 503);
     }
 }
