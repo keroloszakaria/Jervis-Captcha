@@ -8,9 +8,10 @@ use Jervis\Captcha\Contracts\Store;
 
 final readonly class RequestLimiter
 {
-    private const OPERATIONS = ['challenge', 'answer'];
+    private const OPERATIONS = ['session', 'challenge', 'answer'];
     private const DEFAULTS = [
         'global_per_minute' => 5000,
+        'session_per_binding_per_minute' => 30,
         'challenge_per_binding_per_minute' => 30,
         'answer_per_binding_per_minute' => 60,
     ];
@@ -23,7 +24,10 @@ final readonly class RequestLimiter
             throw new \InvalidArgumentException('Unsupported CAPTCHA request budget operation');
         }
 
-        $limits = (array) config('jervis-captcha.request_limits', []);
+        $limits = config('jervis-captcha.request_limits', []);
+        if (!is_array($limits)) {
+            throw new CaptchaException('verification_unavailable', 503);
+        }
         $global = $this->limit($limits, 'global_per_minute');
         $perBinding = $this->limit($limits, $operation . '_per_binding_per_minute');
 
@@ -36,10 +40,11 @@ final readonly class RequestLimiter
 
     public static function configurationValid(): bool
     {
-        $limits = (array) config('jervis-captcha.request_limits', []);
+        $limits = config('jervis-captcha.request_limits', []);
+        if (!is_array($limits)) return false;
         foreach (self::DEFAULTS as $key => $default) {
-            $value = array_key_exists($key, $limits) ? (int) $limits[$key] : $default;
-            if ($value < 1 || $value > 100000) return false;
+            $value = array_key_exists($key, $limits) ? $limits[$key] : $default;
+            if (!is_int($value) || $value < 1 || $value > 100000) return false;
         }
         return true;
     }
@@ -48,8 +53,8 @@ final readonly class RequestLimiter
     private function limit(array $limits, string $key): int
     {
         $default = self::DEFAULTS[$key] ?? throw new \InvalidArgumentException('Unknown CAPTCHA request budget');
-        $value = array_key_exists($key, $limits) ? (int) $limits[$key] : $default;
-        if ($value < 1 || $value > 100000) {
+        $value = array_key_exists($key, $limits) ? $limits[$key] : $default;
+        if (!is_int($value) || $value < 1 || $value > 100000) {
             throw new CaptchaException('verification_unavailable', 503);
         }
         return $value;
