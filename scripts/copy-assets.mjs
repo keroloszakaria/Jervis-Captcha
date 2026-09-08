@@ -16,3 +16,9 @@ for (const destination of ['dist/web', 'packages/php/resources/dist', 'packages/
   await cp('internal/web/dist', destination, { recursive: true });
 }
 await cp('packages/frontend/index.d.ts', 'packages/frontend/dist/index.d.ts');
+
+// Keep the embedded PHP audio renderer on the exact generated digit samples
+// used by the native engine. This is a local build-time copy; there is no
+// runtime TTS or network dependency.
+await mkdir('packages/php/resources/audio', { recursive: true });
+await cp('internal/captcha/audio_samples.go', 'packages/php/resources/audio/digits.asset');
