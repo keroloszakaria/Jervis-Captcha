@@ -15,6 +15,7 @@ on:
       - 'vitest.config.ts'
       - 'scripts/copy-assets.mjs'
       - 'scripts/check-composer-manifests.php'
+      - 'scripts/package-embedded.py'
       - '.github/workflows/php-embedded.yml'
   pull_request:
     paths:
@@ -29,6 +30,7 @@ on:
       - 'vitest.config.ts'
       - 'scripts/copy-assets.mjs'
       - 'scripts/check-composer-manifests.php'
+      - 'scripts/package-embedded.py'
       - '.github/workflows/php-embedded.yml'
   workflow_dispatch:
 
@@ -129,3 +131,41 @@ jobs:
         run: |
           composer show laravel/framework || true
           composer show orchestra/testbench || true
+
+  offline-distribution:
+    needs: [web-package, php-package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: .embedded-assets
+      - name: Use the same verified browser artifacts accepted by package tests
+        shell: bash
+        run: |
+          rm -rf packages/php/resources/dist packages/frontend/dist
+          mkdir -p packages/php/resources/dist packages/frontend/dist
+          cp -a .embedded-assets/packages/php/resources/dist/. packages/php/resources/dist/
+          cp -a .embedded-assets/packages/frontend/dist/. packages/frontend/dist/
+      - name: Build offline Composer and frontend archives
+        run: python3 scripts/package-embedded.py
+      - name: Validate archive structure and checksums
+        shell: bash
+        run: |
+          test -s dist/embedded/manifest.json
+          test -s dist/embedded/SHA256SUMS
+          (cd dist/embedded && sha256sum -c SHA256SUMS)
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'composer.json'
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/dist/jervis-captcha.js'
+          tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/package.json'
+          tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/dist/jervis-captcha.js'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedded-offline-distributions
+          path: dist/embedded/
+          retention-days: 30
+          if-no-files-found: error
