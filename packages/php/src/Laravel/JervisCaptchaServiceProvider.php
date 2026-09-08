@@ -71,13 +71,20 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
     {
         $prefix = EmbeddedConfig::routePrefix();
         $middleware = EmbeddedConfig::routeMiddleware();
-        Route::prefix($prefix)->middleware($middleware)->group(function (): void {
-            Route::post('/session/{action}', [CaptchaController::class, 'session'])->where('action', '[A-Za-z0-9._-]{1,64}')->name('jervis-captcha.session');
-            Route::post('/v1/challenges', [CaptchaController::class, 'challenge'])->name('jervis-captcha.challenge');
-            Route::post('/v1/answers', [CaptchaController::class, 'answer'])->name('jervis-captcha.answer');
+
+        // Browser runtime files are public local assets and do not need to open a
+        // Laravel session. Verification routes remain under the required `web`
+        // middleware so session binding and CSRF protection are preserved.
+        Route::prefix($prefix)->group(function () use ($middleware): void {
             Route::get('/assets/{file}', AssetController::class)
                 ->where('file', 'jervis-captcha(?:-base)?\\.js')
                 ->name('jervis-captcha.asset');
+
+            Route::middleware($middleware)->group(function (): void {
+                Route::post('/session/{action}', [CaptchaController::class, 'session'])->where('action', '[A-Za-z0-9._-]{1,64}')->name('jervis-captcha.session');
+                Route::post('/v1/challenges', [CaptchaController::class, 'challenge'])->name('jervis-captcha.challenge');
+                Route::post('/v1/answers', [CaptchaController::class, 'answer'])->name('jervis-captcha.answer');
+            });
         });
     }
 }
