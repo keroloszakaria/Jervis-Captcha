@@ -43,6 +43,10 @@ export class JervisCaptcha extends LitElement {
   }
   reset() { this.invalidate(); this.managedSessionToken = ''; this.challenge = undefined; this.status = 'idle'; this.errorCode = ''; }
   async renew(): Promise<void> { this.reset(); if (this.presentation !== 'checkbox' && !this.disabled) await this.start(); }
+  private async recover(): Promise<void> {
+    if (this.action && !this.sessionToken) { await this.renew(); return; }
+    this.reset(); this.event('jervis-renew');
+  }
   formResetCallback() { this.reset(); this.event('jervis-renew'); }
   formDisabledCallback(disabled: boolean) { this.disabled = disabled; }
   formStateRestoreCallback() { this.reset(); this.event('jervis-renew'); }
@@ -197,6 +201,7 @@ export class JervisCaptcha extends LitElement {
       <header><span class="mark" aria-hidden="true">J</span><div><h2>${this.t.title}</h2><small>${this.t.subtitle}</small></div></header>
       ${this.status === 'success' ? html`<div class="success" role="status">✓ ${this.t.success}</div>` : this.challengeView()}
       ${this.status === 'idle' && (this.activeSessionToken || this.action) ? html`<button class="primary" type="button" role=${this.presentation === 'checkbox' ? 'checkbox' : 'button'} aria-checked=${this.presentation === 'checkbox' ? 'false' : nothing} @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.start}</button>` : nothing}
+      ${['expired', 'error'].includes(this.status) && (this.action || this.sessionToken) ? html`<button class="primary" type="button" @click=${() => this.recover()} ?disabled=${this.disabled}>${this.t.retry}</button>` : nothing}
       ${this.challenge && this.status === 'ready' ? html`<div class="actions"><button class="primary" part="verify-button" type="button" @click=${() => this.verify()} ?disabled=${this.disabled || this.working || this.challenge.type === 'pow'}>${this.t.verify}</button><button class="refresh" type="button" @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.refresh}</button></div>` : nothing}
       <div class=${errorMessage ? 'status error' : 'status'} role="status" aria-live="polite">${this.working ? html`<span class="spinner"></span>${this.t.work}` : errorMessage || (this.status === 'success' ? '' : this.t[this.status as MessageKey] ?? '')}</div>
       <footer><span>Jervis Captcha</span><span>${this.t.local}</span></footer>

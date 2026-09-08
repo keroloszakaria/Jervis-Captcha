@@ -43,7 +43,10 @@ test('managed frontend package bootstraps its own embedded session', async ({ pa
     element.id = 'managed-captcha'; element.action = 'demo'; element.endpoint = '/jervis-captcha/'; element.presentation = 'invisible';
     document.body.append(element);
   });
-  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).toMatch(/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/);
+  const first = await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).toMatch(/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/).then(() => page.locator('#managed-captcha').evaluate((node: any) => node.token));
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
+  await page.locator('#managed-captcha').evaluate((node: any) => node.renew());
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).not.toBe(first);
   await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
 });
 
