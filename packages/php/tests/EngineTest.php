@@ -29,7 +29,7 @@ final class EngineTest extends TestCase
 
     public function testEveryEmbeddedChallengeTypeCompletesEndToEnd(): void
     {
-        foreach (['text', 'slider', 'drag', 'rotate', 'click', 'math', 'logic', 'pow'] as $type) {
+        foreach (['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic', 'pow'] as $type) {
             $store = new MemoryStore();
             $engine = $this->engine($type, $store);
             $binding = str_repeat('b', 20);
@@ -44,6 +44,19 @@ final class EngineTest extends TestCase
             $state = $store->get(hash('sha256', $session['sessionToken']));
             self::assertIsArray($state);
             $answer = (array) ($state['expected'] ?? []);
+
+            if ($type === 'audio') {
+                self::assertArrayHasKey('audio', $challenge);
+                self::assertMatchesRegularExpression('/^data:audio\/wav;base64,[A-Za-z0-9+\/=]+$/', $challenge['audio']);
+                $encoded = substr($challenge['audio'], strlen('data:audio/wav;base64,'));
+                $wav = base64_decode($encoded, true);
+                self::assertIsString($wav);
+                self::assertGreaterThan(5000, strlen($wav));
+                self::assertSame('RIFF', substr($wav, 0, 4));
+                self::assertSame('WAVE', substr($wav, 8, 4));
+                self::assertMatchesRegularExpression('/^[0-9]{5}$/', (string) ($answer['text'] ?? ''));
+            }
+
             $nonce = null;
             if (isset($challenge['work'])) {
                 $nonce = $this->solveWork((string) $challenge['work']['seed'], (int) $challenge['work']['bits']);
