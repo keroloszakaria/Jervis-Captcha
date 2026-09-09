@@ -34,7 +34,7 @@ Session, challenge and proof expiry are separate. All are bounded by the session
 
 ## `isAntiAI`
 
-This trusted per-action flag enables experimental text noise and requires local proof of work for every selected type. It disallows math/logic, which are trivial automated tasks. It does not enable a model, GPU, cloud classifier, invisible identity profile or any guarantee of AI resistance. Rotation/drag/click puzzles remain low-entropy interactions whose practical value depends on rate limits and the protected operation.
+This trusted per-action flag requires local proof of work for every selected type and keeps the primary challenge pool on interactive tasks. Text is rejected from the primary antiAI pool because local VLM benchmarking showed that visual obfuscation reduces, but does not prevent, machine reading; math/logic remain disallowed as trivial automated tasks. The default hard pool is slider, free drag, rotation and ordered click. This does not enable a model, GPU, cloud classifier, invisible identity profile or any guarantee of AI resistance. Interactive puzzles remain low-entropy tasks whose practical value depends on rate limits, proof-of-work cost and the protected operation.
 
 There is no adaptive ML/risk-scoring engine yet. Selection is from the backend-configured allowlist; a trusted host backend can request a specific allowed type. The public widget cannot request a weaker type or alter policy fields.
 

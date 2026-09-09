@@ -49,6 +49,27 @@ final class PolicyParsingTest extends TestCase
         }
     }
 
+    public function testDefaultAntiAiPrimaryPoolUsesInteractiveChallengesOnly(): void
+    {
+        $policy = Policy::fromArray([]);
+        self::assertTrue($policy->isAntiAI);
+        self::assertSame(['slider', 'drag', 'rotate', 'click'], $policy->types);
+        self::assertNotContains('text', $policy->types);
+    }
+
+    public function testAntiAiPrimaryPoolRejectsTextButNonAntiAiPolicyMayUseIt(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Policy::fromArray(['types' => ['text']]);
+    }
+
+    public function testNonAntiAiPolicyMayUseText(): void
+    {
+        $policy = Policy::fromArray(['types' => ['text'], 'isAntiAI' => false]);
+        self::assertSame(['text'], $policy->types);
+        self::assertFalse($policy->isAntiAI);
+    }
+
     public function testCompletePolicyContractRejectsUnknownFields(): void
     {
         $complete = [

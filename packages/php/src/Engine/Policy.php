@@ -34,7 +34,7 @@ final readonly class Policy
     {
         self::assertKnownKeys($value);
         return new self(
-            self::types($value, 'types', ['text', 'slider', 'rotate']),
+            self::types($value, 'types', ['slider', 'drag', 'rotate', 'click']),
             self::types($value, 'accessibilityTypes', ['audio']),
             self::boolean($value, 'isAntiAI', true),
             self::integer($value, 'workBits', 14),
@@ -105,6 +105,9 @@ final readonly class Policy
         $allTypes = array_values(array_unique([...$this->types, ...$this->accessibilityTypes]));
         if ($this->workBits < 0 || $this->workBits > 20 || (($this->isAntiAI || in_array('pow', $allTypes, true)) && $this->workBits < 12)) {
             throw new InvalidArgumentException('workBits must be 0..20 and at least 12 for antiAI/pow');
+        }
+        if ($this->isAntiAI && in_array('text', $this->types, true)) {
+            throw new InvalidArgumentException('text cannot be enabled in the primary antiAI challenge pool');
         }
         if ($this->isAntiAI && (in_array('math', $allTypes, true) || in_array('logic', $allTypes, true))) {
             throw new InvalidArgumentException('math/logic cannot be enabled in antiAI policies');

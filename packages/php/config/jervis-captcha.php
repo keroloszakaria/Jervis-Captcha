@@ -21,7 +21,9 @@ return [
     ],
     'routes'=>['enabled'=>true,'prefix'=>'jervis-captcha','middleware'=>['web']],
     'default_policy'=>[
-        'types'=>['text','slider','rotate'],
+        // Keep the anti-automation primary pool interactive. Text remains a
+        // supported low-assurance type, but modern VLMs can read it reliably.
+        'types'=>['slider','drag','rotate','click'],
         // The browser can request the accessible variant, but it cannot select
         // a concrete challenge type. Only this server-owned allowlist is used.
         'accessibilityTypes'=>['audio'],

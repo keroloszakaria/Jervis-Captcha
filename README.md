@@ -19,7 +19,7 @@ Laravel/PHP can run the verification engine in-process through `jervis/captcha`;
 | Integrations | `jervis/captcha` Composer package, `@jervis/captcha` browser package, plus generic HTTP/OpenAPI and Node/PHP/Python/.NET native-engine clients |
 | Deployment | In-process Laravel/PHP package or native executable; both can run without Internet access at runtime |
 
-The embedded PHP engine now implements text, slider, drag, rotate, ordered click, English digit audio, math, logic and PoW. Audio uses the same generated local digit samples as the native engine; no runtime TTS or speech API is used. Math and logic are explicitly low-assurance types and cannot be enabled in an `isAntiAI` policy. PoW raises computational cost; it is not proof of a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
+The embedded PHP engine now implements text, slider, drag, rotate, ordered click, English digit audio, math, logic and PoW. Audio uses the same generated local digit samples as the native engine; no runtime TTS or speech API is used. Text, math and logic are low-assurance against modern automation; the primary `isAntiAI` pool therefore rejects them and defaults to slider, drag, rotate and ordered click plus bounded PoW. PoW raises computational cost; neither it nor the interactive puzzles prove a human. Camera, face recognition, passkeys and behavioral identity profiles are deliberately absent from this release.
 
 ## Embedded Laravel package
 

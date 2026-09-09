@@ -98,7 +98,7 @@ The browser may provide an action name such as `signup`, but cannot provide bind
 
 ```php
 'default_policy' => [
-    'types' => ['text', 'slider', 'rotate'],
+    'types' => ['slider', 'drag', 'rotate', 'click'],
     'accessibilityTypes' => ['audio'],
     'isAntiAI' => true,
     'workBits' => 14,
@@ -119,6 +119,10 @@ The browser may provide an action name such as `signup`, but cannot provide bind
 Set `default_policy` to `null` when the application should use an explicit action allowlist only. In that mode, only keys declared under `actions` are accepted, unknown actions return `invalid_context`, and every action array must be a complete policy instead of inheriting hidden library defaults.
 
 Policy parsing is strict: unknown keys and incorrectly typed values are rejected instead of being silently coerced by PHP. Outstanding sessions carry a snapshot of the effective policy. A policy change invalidates those sessions rather than silently verifying them under changed rules.
+
+When `isAntiAI` is enabled, the primary `types` pool cannot contain `text`, `math` or `logic`. Text remains available for explicitly non-antiAI policies, but current VLMs can read the raster text challenge at high rates and it must not be presented as an AI-resistant mechanism. The default hard pool therefore uses slider, free drag, rotation and ordered click plus bounded PoW. The separate `accessibilityTypes` pool remains server-owned and defaults to local digit audio; accessibility alternatives are not anti-AI guarantees.
+
+**Alpha migration note:** custom antiAI policies that previously included `text` must remove it from the primary `types` list before upgrading this candidate. Use an interactive hard pool, or set `isAntiAI => false` when text is deliberately required as a low-assurance challenge. This policy change intentionally invalidates outstanding sessions because effective policy snapshots no longer match.
 
 ## Accessible variant
 
@@ -233,4 +237,4 @@ No CDN or remote runtime download is required after deployment. Verify `SHA256SU
 
 The embedded PHP engine implements raster text, slider, free drag, rotation, ordered click, English digit audio, math, logic and bounded proof-of-work.
 
-`isAntiAI` remains an experimental hardening profile. It is not a claim that a challenge is AI-proof. A preliminary Windows Media OCR benchmark is available under `tests/adversarial/`; on one 50-sample-per-profile run with four preprocessing variants, standard text produced a 4% defender-worst exact rate and `isAntiAI` produced 2%. That single traditional OCR result is **insufficient** to promote the profile: modern VLMs, additional OCR families and human usability/accessibility cohorts remain required.
+`isAntiAI` remains an experimental anti-automation hardening profile. It is not a claim that a challenge is AI-proof. The strict local harness has exercised Windows Media OCR and Tesseract over 400-record text corpora and a smaller 40-record cohort against a local Qwen3.5 9B vision model. The VLM solved 85% of standard text attempts and 50% of hardened-text attempts overall; its attacker-best grayscale rates were 100% and 80% respectively. That evidence is why text is no longer permitted in the primary antiAI pool: visual obfuscation reduced solver success but did not create a security boundary. Human usability/accessibility measurements, broader VLM families and independent review are still required before production security claims.

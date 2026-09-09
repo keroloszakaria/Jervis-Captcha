@@ -271,7 +271,7 @@ func TestHardenedPolicyRequiresWork(t *testing.T) {
 	p := captcha.DefaultPolicy()
 	p.MinSolveMS = 0
 	site.Actions["signup"] = p
-	s, c := start(t, e, "text")
+	s, c := start(t, e, "slider")
 	if c.Work == nil {
 		t.Fatal("work missing")
 	}
@@ -368,7 +368,7 @@ func TestAuthentication(t *testing.T) {
 	}
 }
 func TestPoliciesValidate(t *testing.T) {
-	for _, name := range []string{"empty", "unsupported", "duplicate", "weak", "work", "ttl", "attempts", "refresh", "timing", "rate"} {
+	for _, name := range []string{"empty", "unsupported", "duplicate", "text-hard", "weak", "work", "ttl", "attempts", "refresh", "timing", "rate"} {
 		t.Run(name, func(t *testing.T) {
 			p := captcha.DefaultPolicy()
 			switch name {
@@ -378,6 +378,8 @@ func TestPoliciesValidate(t *testing.T) {
 				p.Types = []string{"biometric"}
 			case "duplicate":
 				p.Types = []string{"text", "text"}
+			case "text-hard":
+				p.Types = []string{"text"}
 			case "weak":
 				p.Types = []string{"math"}
 			case "work":
@@ -397,6 +399,15 @@ func TestPoliciesValidate(t *testing.T) {
 				t.Fatal("invalid policy accepted")
 			}
 		})
+	}
+}
+func TestTextPolicyAllowedWhenAntiAIDisabled(t *testing.T) {
+	p := captcha.DefaultPolicy()
+	p.IsAntiAI = false
+	p.Types = []string{"text"}
+	p.WorkBits = 0
+	if err := p.Validate(); err != nil {
+		t.Fatalf("non-antiAI text policy rejected: %v", err)
 	}
 }
 func TestWorkRejectsUnboundedNonce(t *testing.T) {
