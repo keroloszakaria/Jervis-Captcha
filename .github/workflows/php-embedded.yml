@@ -194,6 +194,33 @@ jobs:
           php artisan jervis-captcha:install --skip-doctor
           php artisan jervis-captcha:doctor
           php artisan route:list --path=jervis-captcha
+      - name: Exercise final Composer ZIP and frontend TGZ in Chromium with zero egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-offline-consumer"
+          FRONTEND="$RUNNER_TEMP/jervis-captcha-frontend-artifact"
+          rm -rf "$FRONTEND"
+          mkdir -p "$FRONTEND" "$CONSUMER/public/__jervis/frontend"
+          tar -xzf dist/embedded/jervis-captcha-frontend-*.tgz -C "$FRONTEND"
+          cp "$FRONTEND/package/dist/jervis-captcha.js" "$CONSUMER/public/__jervis/frontend/jervis-captcha.js"
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php tests/consumers/laravel/PrepareHttpConsumer.php
+          cd "$CONSUMER"
+          php artisan config:clear
+          php artisan serve --host=127.0.0.1 --port=18190 --no-reload >"$RUNNER_TEMP/jervis-packaged-browser.log" 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18190/__jervis/csrf >/dev/null; then break; fi
+            if [ "$attempt" = 30 ]; then cat "$RUNNER_TEMP/jervis-packaged-browser.log"; exit 1; fi
+            sleep 1
+          done
+          cd "$GITHUB_WORKSPACE"
+          node tests/consumers/laravel/PackagedBrowserAcceptance.mjs http://127.0.0.1:18190/
+          node tests/consumers/laravel/PackagedSpaAcceptance.mjs http://127.0.0.1:18190/
+          kill "$HTTP_PID"
+          wait "$HTTP_PID" 2>/dev/null || true
+          trap - EXIT
           cp "$GITHUB_WORKSPACE/tests/consumers/laravel/JervisCaptchaConsumerTest.php" tests/Feature/JervisCaptchaConsumerTest.php
           php artisan test tests/Feature/JervisCaptchaConsumerTest.php
 
@@ -245,7 +272,7 @@ jobs:
   offline-distribution:
     needs: [web-package, php-package]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -260,6 +287,14 @@ jobs:
           extensions: gd,zlib,pdo_sqlite,sqlite3
           tools: composer:v2
           coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install packaged-browser acceptance runtime
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
       - name: Use the same verified browser and audio artifacts accepted by package tests
         shell: bash
         run: |

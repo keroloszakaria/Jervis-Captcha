@@ -39,6 +39,33 @@ config()->set('jervis-captcha.request_limits', [
 \Illuminate\Support\Facades\Route::get('/__jervis/csrf', fn () => response()->json(['token' => csrf_token()]));
 \Illuminate\Support\Facades\Route::post('/__jervis/protected', fn () => response()->json(['accepted' => true]))
     ->middleware('jervis.captcha:signup');
+\Illuminate\Support\Facades\Route::get('/__jervis/browser', function () {
+    return \Illuminate\Support\Facades\Blade::render(<<<'BLADE'
+<!doctype html><html><head><meta name="csrf-token" content="{{ csrf_token() }}"></head><body>
+<form id="protected-form" method="POST" action="/__jervis/browser-submit">
+@csrf
+<x-jervis-captcha action="signup" presentation="invisible" />
+<button id="submit" type="submit">Submit protected action</button>
+</form>
+</body></html>
+BLADE);
+});
+\Illuminate\Support\Facades\Route::post('/__jervis/browser-submit', fn () => response('<p id="result">accepted</p>'))
+    ->middleware('jervis.captcha:signup');
+\Illuminate\Support\Facades\Route::get('/__jervis/spa', function () {
+    return \Illuminate\Support\Facades\Blade::render(<<<'BLADE'
+<!doctype html><html><head><meta name="csrf-token" content="{{ csrf_token() }}">
+<script type="module" src="/__jervis/frontend/jervis-captcha.js"></script></head><body>
+<form id="protected-form" method="POST" action="/__jervis/spa-submit">
+@csrf
+<jervis-captcha action="signup" presentation="invisible"></jervis-captcha>
+<button id="submit" type="submit">Submit protected action</button>
+</form>
+</body></html>
+BLADE);
+});
+\Illuminate\Support\Facades\Route::post('/__jervis/spa-submit', fn () => response('<p id="result">accepted</p>'))
+    ->middleware('jervis.captcha:signup');
 // JERVIS_CAPTCHA_REAL_HTTP_ACCEPTANCE_END
 PHP;
 

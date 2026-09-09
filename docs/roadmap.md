@@ -35,13 +35,15 @@ Cross-process one-use-proof races also passed against Laravel File, SQLite-backe
 
 The generated `jervis-captcha-php-0.2.0-alpha.1.zip` was installed into a clean Laravel 12 application from a local Composer `artifact` repository with `COMPOSER_DISABLE_NETWORK=1`. Composer resolved Jervis from the local ZIP, package discovery completed, and `jervis-captcha:install` plus `jervis-captcha:doctor` passed on the installed artifact. Network-backed audit was intentionally not part of that isolated import step because dependency audit is performed while the build host is connected.
 
+The same offline-installed Laravel 12 artifact was then exercised in headless Chromium. A Blade form containing only `<x-jervis-captcha action="signup" presentation="invisible" />` completed the package-managed PoW flow and protected form submit with zero external browser requests; the package-served JavaScript also exposed the expected `nosniff` and same-origin CORP headers. Separately, the generated frontend TGZ supplied `dist/jervis-captcha.js` to a same-origin SPA page containing only the module import and `<jervis-captcha action="signup" presentation="invisible"></jervis-captcha>`; that packaged SPA flow also completed a protected submit with zero external requests.
+
 This local evidence is useful for development but **does not replace** hosted CI, the full browser/native matrix or production/customer acceptance below.
 
 ## Must be verified before a customer production rollout
 
 - [ ] Obtain a successful **full** CI run for the exact candidate source commit. Current GitHub-hosted jobs have repeatedly failed before checkout or any test step starts (`runner_id=0`, `steps=[]`), so those runs are not evidence of implementation failure or success.
 - [ ] Obtain a successful **Embedded PHP package** hosted run for the exact candidate: canonical browser build, Laravel 12/13 package tests, fresh-app installs, Composer audit, File/Database/Redis cross-process proof races, offline archive generation and network-disabled local-ZIP installation.
-- [ ] Run the real consuming Laravel fixture against both Blade and same-origin SPA submission paths using the final packaged artifacts.
+- [x] Local final-artifact browser acceptance passed for both Blade (Composer ZIP asset) and a same-origin SPA (frontend TGZ asset), including protected submit and zero-egress checks. Hosted/equivalent release evidence is still required for the exact release candidate.
 - [ ] Perform load/resource-exhaustion tests for PHP-FPM workers, GD image generation, audio generation, PoW, session creation and invalid-token traffic; tune defaults from measured results.
 - [ ] Customer-native Windows/macOS/Linux runtime acceptance and first-boot packet capture with Internet blocked for native deployments.
 - [ ] Customer reverse-proxy/TLS/ACL, OS/data permissions, secret provisioning and rollback recovery checks.
