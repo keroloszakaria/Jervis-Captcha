@@ -16,7 +16,7 @@ Repeat after restart and after a binary update. Remove a required asset/configur
 
 A connected build machine is allowed to resolve pinned dependencies. CI records Go module checksums and npm lockfiles and compiles the runtime assets. The deployment machine does not need those tools.
 
-An offline **source** rebuild requires the toolchains, dependency caches/vendor directory and generated assets to be transferred in advance. A repository checkout alone is not sufficient. Do not run `npm install`, `go mod download`, eSpeak installation or Playwright browser installation on an isolated customer machine expecting Internet access.
+An offline **source** rebuild requires the toolchains, the npm/Composer caches or internal package repositories, the Go module cache, and generated assets to be transferred in advance. A repository checkout alone is not sufficient. The root `vendor/` directory belongs to Composer; native Go builds use `-mod=readonly` and the Go module cache rather than treating Composer's directory as Go vendoring. Do not run `npm install`, `go mod download`, eSpeak installation or Playwright browser installation on an isolated customer machine expecting Internet access.
 
 ## Updates
 

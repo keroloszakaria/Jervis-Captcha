@@ -85,10 +85,12 @@ Build prerequisites: Go 1.26.8, Node 22.12+ and npm. The first native bootstrap 
 npm ci
 npm run validate:web
 go mod download
-go test -race ./...
-go vet ./...
-go build -trimpath -o jervis-captcha ./cmd/jervis-captcha
+go test -mod=readonly -race ./...
+go vet -mod=readonly ./...
+go build -mod=readonly -trimpath -o jervis-captcha ./cmd/jervis-captcha
 ```
+
+The explicit `-mod=readonly` is intentional in this mixed PHP/Go repository: Composer also uses a root `vendor/` directory, which Go would otherwise auto-detect as Go vendoring after `composer install`.
 
 For embedded packages, `npm run build` produces the browser package artifact used by both Composer and npm distributions, and `python3 scripts/package-embedded.py` creates offline Composer/npm-compatible archives after validation. The package build also copies the generated native digit-audio payload byte-for-byte into the Composer artifact so both runtimes use the same local source samples.
 

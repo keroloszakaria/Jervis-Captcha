@@ -66,9 +66,9 @@ jobs:
           npm pack ./packages/frontend --pack-destination dist/npm
       - name: Go tests with race detector and real SQLite
         shell: bash
-        run: go test -race -count=1 -json ./... | tee go-test.jsonl
+        run: go test -mod=readonly -race -count=1 -json ./... | tee go-test.jsonl
       - name: Go static analysis
-        run: go vet ./...
+        run: go vet -mod=readonly ./...
       - name: PHP package syntax and existing SDK validation
         run: |
           php scripts/check-composer-manifests.php
@@ -83,7 +83,7 @@ jobs:
         run: |
           mkdir -p .sdk-build
           npx tsc sdk/node/client.ts --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --declaration --outDir .sdk-build
-          go build -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
+          go build -mod=readonly -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
           dotnet build tests/consumers/dotnet/Consumer.csproj --configuration Release --nologo
           python3 scripts/test-sdk-integration.py .sdk-build/jervis-captcha
       - name: Build local documentation
@@ -99,7 +99,7 @@ jobs:
           for target in linux-amd64 windows-amd64 darwin-arm64; do
             os="${target%-*}"; arch="${target#*-}"; ext=""; [ "$os" != windows ] || ext=".exe"
             mkdir -p "dist/releases/jervis-captcha-$target"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w -buildid=' -o "dist/releases/jervis-captcha-$target/jervis-captcha$ext" ./cmd/jervis-captcha
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -mod=readonly -trimpath -ldflags='-s -w -buildid=' -o "dist/releases/jervis-captcha-$target/jervis-captcha$ext" ./cmd/jervis-captcha
           done
           python3 scripts/release.py
       - name: Record validation evidence
