@@ -16,6 +16,7 @@ final class InstallCommand extends Command
         $this->info('Jervis Captcha embedded mode installed. No separate engine service is required.');
         $this->line('Blade: <x-jervis-captcha action="signup" />');
         $this->line("Route middleware: ->middleware('jervis.captcha:signup')");
+        $this->line('Optional dedicated base secret: php artisan jervis-captcha:key');
 
         if ((bool) $this->option('skip-doctor')) {
             $this->warn('Runtime readiness checks were skipped. Run php artisan jervis-captcha:doctor before deployment.');

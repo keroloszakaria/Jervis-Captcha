@@ -27,6 +27,20 @@ For Blade, the complete browser integration is:
 
 The component serves the bundled local browser widget, obtains its verification session from package-owned routes, solves the configured challenge and submits the one-use proof. The consuming application must not duplicate answer checking, proof parsing, replay prevention or CAPTCHA session creation.
 
+## Secret material and rotation
+
+Embedded mode works without another setup secret: by default `JERVIS_CAPTCHA_SECRET` falls back to Laravel's `APP_KEY`. The package domain-separates that base value before it is used by the CAPTCHA engine, so Jervis does not reuse the raw application key as CAPTCHA HMAC material and never exposes either value to the browser.
+
+A deployment that wants an independent key lifecycle can create a dedicated base secret:
+
+```bash
+php artisan jervis-captcha:key
+```
+
+The command writes a cryptographically random `JERVIS_CAPTCHA_SECRET` to Laravel `.env` when that file is the source of configuration. It does not overwrite a secret supplied only by the deployment environment/secret manager. Existing dedicated values are preserved unless `--force` is supplied; forced rotation intentionally invalidates outstanding CAPTCHA sessions and one-use proofs. Duplicate `.env` declarations fail closed instead of guessing which value Laravel will load.
+
+Both the `APP_KEY` fallback and a dedicated `JERVIS_CAPTCHA_SECRET` must provide at least 32 bytes of base material. Changing from the fallback to a dedicated secret, rotating either base, or rotating `APP_KEY` while the fallback is active invalidates outstanding CAPTCHA state by design. `jervis-captcha:key` clears Laravel's configuration cache when it changes the local value; rebuild the cache with `php artisan config:cache` as appropriate for the deployment. Never place either base secret in frontend code, JavaScript configuration or a browser response.
+
 ## Proof field name
 
 Embedded mode uses one **server-owned** proof field name for the Blade component, SPA widget and middleware:

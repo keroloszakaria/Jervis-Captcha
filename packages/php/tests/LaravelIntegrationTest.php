@@ -207,6 +207,41 @@ final class LaravelIntegrationTest extends TestCase
         $this->get('/jervis-captcha/assets/../config/jervis-captcha.php')->assertNotFound();
     }
 
+    public function testDedicatedKeyCommandWritesEnvAndUpdatesRuntimeConfig(): void
+    {
+        $environmentPath = sys_get_temp_dir() . '/jervis-captcha-key-' . bin2hex(random_bytes(8));
+        mkdir($environmentPath, 0777, true);
+        file_put_contents($environmentPath . '/.env', "APP_NAME=Fixture\n");
+        $originalEnvironmentPath = $this->app->environmentPath();
+        $this->app->useEnvironmentPath($environmentPath);
+
+        try {
+            $this->artisan('jervis-captcha:key')->assertSuccessful();
+            $contents = (string) file_get_contents($environmentPath . '/.env');
+            self::assertSame(1, preg_match('/^JERVIS_CAPTCHA_SECRET=([a-f0-9]{64})$/m', $contents, $match));
+            self::assertSame($match[1], $this->app['config']->get('jervis-captcha.secret'));
+        } finally {
+            $this->app->useEnvironmentPath($originalEnvironmentPath);
+            @unlink($environmentPath . '/.env');
+            @rmdir($environmentPath);
+        }
+    }
+
+    public function testAppKeyFallbackCanOpenManagedSessionWithoutDedicatedSecret(): void
+    {
+        $this->app['config']->set('jervis-captcha.secret', (string) $this->app['config']->get('app.key'));
+
+        $session = $this->postJson('/jervis-captcha/session/signup')->assertOk()->json();
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $session['sessionToken']);
+    }
+
+    public function testPackageRegistersInstallDoctorAndOptionalDedicatedKeyCommands(): void
+    {
+        $commands = $this->app->make(\Illuminate\Contracts\Console\Kernel::class)->all();
+        self::assertArrayHasKey('jervis-captcha:install', $commands);
+        self::assertArrayHasKey('jervis-captcha:doctor', $commands);
+        self::assertArrayHasKey('jervis-captcha:key', $commands);
+    }
     private function solveWork(string $seed, int $bits): string
     {
         for ($i = 0; $i < 10_000_000; $i++) {

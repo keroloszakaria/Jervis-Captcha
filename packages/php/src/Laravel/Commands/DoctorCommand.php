@@ -20,6 +20,11 @@ final class DoctorCommand extends Command
         $audioAsset = dirname(__DIR__, 3) . '/resources/audio/digits.asset';
         $cacheStore = (string) (config('jervis-captcha.store') ?: config('cache.default', ''));
         $secret = (string) config('jervis-captcha.secret', '');
+        $appKey = (string) config('app.key', '');
+        $usesAppKeyFallback = $secret !== '' && $appKey !== '' && hash_equals($appKey, $secret);
+        $secretBaseLabel = $secret === ''
+            ? '(missing)'
+            : ($usesAppKeyFallback ? 'APP_KEY fallback (domain-separated)' : 'dedicated JERVIS_CAPTCHA_SECRET');
         $fieldNameReady = EmbeddedConfig::validFieldName();
         $routesEnabled = (bool) config('jervis-captcha.routes.enabled', true);
         $routesReady = !$routesEnabled || EmbeddedConfig::validRouteConfiguration();
@@ -59,9 +64,13 @@ final class DoctorCommand extends Command
             $this->line(sprintf('%-26s %s', $label, $ok ? 'OK' : 'FAIL'));
         }
         $this->line(sprintf('%-26s %s', 'cache store', $cacheStore !== '' ? $cacheStore : '(not configured)'));
+        $this->line(sprintf('%-26s %s', 'secret base', $secretBaseLabel));
         $this->line(sprintf('%-26s %s', 'proof field', $fieldNameReady ? EmbeddedConfig::fieldName() : '(invalid)'));
         $this->line(sprintf('%-26s %s', 'package routes', $routesEnabled ? ($routesReady ? EmbeddedConfig::routePrefix() : '(invalid)') : 'disabled'));
 
+        if ($usesAppKeyFallback) {
+            $this->comment('Secret guidance: APP_KEY fallback is zero-setup and domain-separated. Use php artisan jervis-captcha:key for an optional dedicated base secret.');
+        }
         if (!$fieldNameReady) {
             $this->warn('JERVIS_CAPTCHA_FIELD_NAME must start with a letter/underscore and contain only letters, numbers, underscore or hyphen (max 64 chars).');
         }

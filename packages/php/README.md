@@ -6,6 +6,8 @@ Embedded Laravel integration for Jervis Captcha. It runs the verification engine
 composer require jervis/captcha
 php artisan jervis-captcha:install
 php artisan jervis-captcha:doctor
+# Optional dedicated base secret; APP_KEY remains the zero-config fallback.
+php artisan jervis-captcha:key
 ```
 
 ```blade

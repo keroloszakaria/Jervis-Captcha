@@ -28,6 +28,9 @@ Laravel 12 and 13 can run Jervis Captcha entirely inside the application process
 ```bash
 composer require jervis/captcha
 php artisan jervis-captcha:install
+php artisan jervis-captcha:doctor
+# Optional: create a dedicated CAPTCHA base secret instead of the APP_KEY fallback.
+php artisan jervis-captcha:key
 ```
 
 ```php

@@ -14,6 +14,7 @@ use Jervis\Captcha\Contracts\Store;
 use Jervis\Captcha\Engine\EmbeddedEngine;
 use Jervis\Captcha\Laravel\Commands\DoctorCommand;
 use Jervis\Captcha\Laravel\Commands\InstallCommand;
+use Jervis\Captcha\Laravel\Commands\KeyCommand;
 use Jervis\Captcha\Laravel\Components\Captcha;
 use Jervis\Captcha\Laravel\Controllers\AssetController;
 use Jervis\Captcha\Laravel\Controllers\CaptchaController;
@@ -21,6 +22,7 @@ use Jervis\Captcha\Laravel\Middleware\LimitCaptchaPayload;
 use Jervis\Captcha\Laravel\Middleware\VerifyCaptcha;
 use Jervis\Captcha\Laravel\Storage\LaravelCacheStore;
 use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
+use Jervis\Captcha\Laravel\Support\EmbeddedSecret;
 use Jervis\Captcha\Laravel\Support\LaravelSessionBinding;
 
 final class JervisCaptchaServiceProvider extends ServiceProvider
@@ -49,7 +51,7 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
 
             return new EmbeddedEngine(
                 $app->make(Store::class),
-                (string) config('jervis-captcha.secret'),
+                EmbeddedSecret::derive((string) config('jervis-captcha.secret')),
                 $actions,
                 $defaultPolicy,
                 null,
@@ -64,7 +66,7 @@ final class JervisCaptchaServiceProvider extends ServiceProvider
         Blade::component('jervis-captcha', Captcha::class);
         $this->loadViewsFrom(dirname(__DIR__, 2) . '/resources/views', 'jervis-captcha');
         $this->publishes([dirname(__DIR__, 2) . '/config/jervis-captcha.php' => config_path('jervis-captcha.php')], 'jervis-captcha-config');
-        if ($this->app->runningInConsole()) $this->commands([InstallCommand::class, DoctorCommand::class]);
+        if ($this->app->runningInConsole()) $this->commands([InstallCommand::class, KeyCommand::class, DoctorCommand::class]);
         if ((bool) config('jervis-captcha.routes.enabled', true)) $this->routes();
     }
 

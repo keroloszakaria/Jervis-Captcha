@@ -1,8 +1,9 @@
 <?php
 use Jervis\Captcha\Laravel\Support\LaravelSessionBinding;
 return [
-    // Dedicated secret is recommended. APP_KEY is a safe zero-setup fallback and
-    // rotating it intentionally revokes outstanding CAPTCHA sessions/proofs.
+    // A dedicated base secret is optional. APP_KEY is the zero-setup fallback;
+    // the provider domain-separates either value before the engine uses it.
+    // Rotating either base intentionally revokes outstanding sessions/proofs.
     'secret'=>env('JERVIS_CAPTCHA_SECRET',env('APP_KEY')),
     'store'=>env('JERVIS_CAPTCHA_STORE'),
     'cache_prefix'=>'jervis-captcha:',

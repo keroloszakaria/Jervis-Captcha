@@ -20,6 +20,7 @@ This document separates implemented capabilities from release assurance. `valida
 - [x] Embedded session/challenge/answer request budgets independent of action names, plus per-session attempts/refresh limits and issuance limits.
 - [x] Package-owned 32 KiB verification request guard and bounded answer schema.
 - [x] Strict policy/config parsing, explicit allowlist mode, safe route-prefix validation and mandatory Laravel `web` middleware on managed verification routes.
+- [x] Embedded secret domain separation plus optional `jervis-captcha:key` provisioning/rotation; APP_KEY remains the zero-config fallback and duplicate `.env` secret declarations fail closed.
 - [x] Native build/packaging workflow plus minimal Composer/npm offline packaging with checksum manifest and local third-party notices.
 - [x] Fresh Laravel consumer fixture, cross-process File/Database/Redis proof-race fixtures and network-disabled local-Composer-ZIP install gates are defined in the focused workflow.
 - [x] Tests defined for replay, concurrent state transitions, wrong contexts, expiry, refresh/attempt budgets, request budgets, policy changes, origin checks, malformed inputs, type forcing, accessible audio fallback, offline browser requests and real widget-to-engine integration across Chromium, Firefox and WebKit.
@@ -27,7 +28,7 @@ This document separates implemented capabilities from release assurance. `valida
 
 ## Development validation already observed
 
-A Windows development machine has executed the embedded candidate with PHP 8.4 / Laravel 13 dependencies. The observed local checks included TypeScript compilation, 19/19 Vitest tests, canonical Vite packaging, Composer manifest validation, Composer dependency audit with no advisories reported at that run, 44/44 PHP/Laravel tests with 547 assertions, deterministic embedded ZIP/TGZ generation and a successful npm dry-run package containing only the intended runtime files.
+A Windows development machine has executed the embedded candidate with PHP 8.4 / Laravel 13 dependencies. The observed local checks included TypeScript compilation, 19/19 Vitest tests, canonical Vite packaging, Composer manifest validation, Composer dependency audit with no advisories reported at that run, 54/54 PHP/Laravel tests with 582 assertions, embedded APP_KEY-fallback/dedicated-secret command coverage, deterministic embedded ZIP/TGZ generation and a successful npm dry-run package containing only the intended runtime files.
 
 Fresh consuming applications were also exercised locally for Laravel 12 and Laravel 13. In both generations, package discovery, `jervis-captcha:install`, `jervis-captcha:doctor`, the package-owned Feature consumer (3/3 tests, 23 assertions), and a real HTTP cookie/CSRF flow all passed. The real HTTP flow used the production Laravel session binding and verified session creation, PoW solving, one-use proof consumption, replay rejection, concrete-type forcing rejection and the server-owned accessible audio variant.
 
