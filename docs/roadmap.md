@@ -8,7 +8,7 @@ This document separates implemented capabilities from release assurance. `valida
 - [x] Local SQLite state, revision CAS, persistent counters, expiry cleanup and schema-version guard.
 - [x] Embedded PHP engine that runs in-process in Laravel with no separate Jervis service, daemon, port or container.
 - [x] Laravel package-owned routes, trusted session binding, atomic cache locks, one-use proof consumption, middleware, Blade component, install/doctor commands and fail-closed storage behavior.
-- [x] Laravel 11/12/13 Composer compatibility constraints with a dedicated Testbench/fresh-app matrix for the matching generations.
+- [x] Laravel 12/13 Composer compatibility constraints with a dedicated Testbench/fresh-app matrix for the supported generations. Laravel 11 is intentionally excluded after its security-fix window ended on March 12, 2026.
 - [x] Text, slider, free drag, rotation, ordered click, English audio, math, logic and PoW generators/verifiers in the embedded PHP engine.
 - [x] Shared local English digit-audio source payload between Go and PHP; the embedded build uses server-generated WAV instead of browser TTS.
 - [x] Server-owned `standard` / `accessible` session variants. Managed clients cannot force a concrete type, binding, policy or `isAntiAI`; the default accessible pool uses local audio.
@@ -29,12 +29,18 @@ This document separates implemented capabilities from release assurance. `valida
 
 A Windows development machine has executed the embedded candidate with PHP 8.4 / Laravel 13 dependencies. The observed local checks included TypeScript compilation, 19/19 Vitest tests, canonical Vite packaging, Composer manifest validation, Composer dependency audit with no advisories reported at that run, 43/43 PHP/Laravel tests with 545 assertions, deterministic embedded ZIP/TGZ generation and a successful npm dry-run package containing only the intended runtime files.
 
-This local evidence is useful for development but **does not replace** the Laravel 11/12 matrix, hosted CI, real browser/native matrix, concurrency stores or production/customer acceptance below.
+Fresh consuming applications were also exercised locally for Laravel 12 and Laravel 13. In both generations, package discovery, `jervis-captcha:install`, `jervis-captcha:doctor`, the package-owned Feature consumer (3/3 tests, 23 assertions), and a real HTTP cookie/CSRF flow all passed. The real HTTP flow used the production Laravel session binding and verified session creation, PoW solving, one-use proof consumption, replay rejection, concrete-type forcing rejection and the server-owned accessible audio variant.
+
+Cross-process one-use-proof races also passed against Laravel File, SQLite-backed Database and Redis cache stores: each race produced exactly one `consumed` result and one `rejected` result for the same proof.
+
+The generated `jervis-captcha-php-0.2.0-alpha.1.zip` was installed into a clean Laravel 12 application from a local Composer `artifact` repository with `COMPOSER_DISABLE_NETWORK=1`. Composer resolved Jervis from the local ZIP, package discovery completed, and `jervis-captcha:install` plus `jervis-captcha:doctor` passed on the installed artifact. Network-backed audit was intentionally not part of that isolated import step because dependency audit is performed while the build host is connected.
+
+This local evidence is useful for development but **does not replace** hosted CI, the full browser/native matrix or production/customer acceptance below.
 
 ## Must be verified before a customer production rollout
 
 - [ ] Obtain a successful **full** CI run for the exact candidate source commit. Current GitHub-hosted jobs have repeatedly failed before checkout or any test step starts (`runner_id=0`, `steps=[]`), so those runs are not evidence of implementation failure or success.
-- [ ] Obtain a successful **Embedded PHP package** run for the exact candidate: canonical browser build, Laravel 11/12/13 package tests, fresh-app installs, Composer audit, File/Database/Redis cross-process proof races, offline archive generation and network-disabled local-ZIP installation.
+- [ ] Obtain a successful **Embedded PHP package** hosted run for the exact candidate: canonical browser build, Laravel 12/13 package tests, fresh-app installs, Composer audit, File/Database/Redis cross-process proof races, offline archive generation and network-disabled local-ZIP installation.
 - [ ] Run the real consuming Laravel fixture against both Blade and same-origin SPA submission paths using the final packaged artifacts.
 - [ ] Perform load/resource-exhaustion tests for PHP-FPM workers, GD image generation, audio generation, PoW, session creation and invalid-token traffic; tune defaults from measured results.
 - [ ] Customer-native Windows/macOS/Linux runtime acceptance and first-boot packet capture with Internet blocked for native deployments.
@@ -53,8 +59,8 @@ This local evidence is useful for development but **does not replace** the Larav
 
 ## Next implementation order
 
-1. Land the locally validated embedded fixes on top of the latest remote branch without force-pushing or losing security commits.
-2. Obtain successful Laravel 11/12/13 hosted/fresh-app evidence and execute File/Database/Redis cross-process proof races plus offline-ZIP install acceptance.
+1. Land the Laravel 12/13 support policy and the new fresh-consumer/real-HTTP acceptance fixtures on the implementation branch.
+2. Obtain successful Laravel 12/13 hosted evidence for the same acceptance gates already observed locally.
 3. Restore full browser/native CI evidence for the exact candidate and generate verified release artifacts.
 4. Run security/load/accessibility/solver benchmarks and tune policies from measured results.
 5. Publish Composer/npm packages only after licensing, signing and release approval are decided.

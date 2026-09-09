@@ -4,7 +4,7 @@ Jervis Captcha can run **inside the Laravel PHP process**. This mode does not st
 
 ## Intended Laravel usage
 
-The repository root contains the Composer package manifest so a tagged/released repository can be consumed as `jervis/captcha`; `packages/php/composer.json` mirrors the PHP subtree for offline/split packaging. The package targets Laravel 11, 12 and 13 with PHP 8.2+.
+The repository root contains the Composer package manifest so a tagged/released repository can be consumed as `jervis/captcha`; `packages/php/composer.json` mirrors the PHP subtree for offline/split packaging. The package targets supported Laravel 12 and 13 releases with PHP 8.2+. Laravel 11 is intentionally excluded because its security-fix window ended on March 12, 2026.
 
 ```bash
 composer require jervis/captcha

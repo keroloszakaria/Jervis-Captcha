@@ -23,7 +23,7 @@ The embedded PHP engine now implements text, slider, drag, rotate, ordered click
 
 ## Embedded Laravel package
 
-Laravel 11, 12 and 13 can run Jervis Captcha entirely inside the application process on PHP 8.2+: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; `@jervis/captcha` contains the framework-neutral browser widget for SPA projects.
+Laravel 12 and 13 can run Jervis Captcha entirely inside the application process on PHP 8.2+: no Go daemon, second port or external verification endpoint. The Composer package owns the engine, routes, middleware, cache locking and Blade component; `@jervis/captcha` contains the framework-neutral browser widget for SPA projects.
 
 ```bash
 composer require jervis/captcha

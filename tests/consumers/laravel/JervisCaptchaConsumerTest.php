@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Jervis\Captcha\Contracts\BindingResolver;
 use Tests\TestCase;
 
 final class JervisCaptchaConsumerTest extends TestCase
@@ -11,6 +13,14 @@ final class JervisCaptchaConsumerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Laravel's Feature test client does not preserve one browser session ID
+        // across independent postJson() calls. Keep this fixture focused on the
+        // package-owned consumer flow; real HTTP cookie/session binding is tested
+        // separately by RealHttpAcceptance.php.
+        $this->app->instance(BindingResolver::class, new class implements BindingResolver {
+            public function resolve(Request $request): string { return 'fresh-consumer-fixed-binding-0001'; }
+        });
 
         config()->set('cache.default', 'file');
         config()->set('session.driver', 'file');

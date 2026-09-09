@@ -25,3 +25,6 @@ native-validation.json
 airgap-validation.json
 packages/php/vendor/
 packages/php/composer.lock
+/vendor/
+/composer.lock
+**/.phpunit.result.cache

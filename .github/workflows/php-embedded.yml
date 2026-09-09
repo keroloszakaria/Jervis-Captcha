@@ -99,11 +99,6 @@ jobs:
       matrix:
         include:
           - php: '8.2'
-            label: '11'
-            laravel: '^11.45.2'
-            testbench: '^9.15'
-            app: '^11.0'
-          - php: '8.2'
             label: '12'
             laravel: '^12.40.0'
             testbench: '^10.8'
@@ -149,7 +144,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: gd,zlib,redis
+          extensions: gd,zlib,redis,pdo_sqlite,sqlite3
           tools: composer:v2
           coverage: none
       - name: Validate manifests and PHP syntax
@@ -202,6 +197,22 @@ jobs:
           cp "$GITHUB_WORKSPACE/tests/consumers/laravel/JervisCaptchaConsumerTest.php" tests/Feature/JervisCaptchaConsumerTest.php
           php artisan test tests/Feature/JervisCaptchaConsumerTest.php
 
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/PrepareHttpConsumer.php"
+          php artisan config:clear
+          HTTP_PORT="181${{ matrix.label }}"
+          php artisan serve --host=127.0.0.1 --port="$HTTP_PORT" --no-reload >"$RUNNER_TEMP/jervis-http-${{ matrix.label }}.log" 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:${HTTP_PORT}/__jervis/csrf" >/dev/null; then break; fi
+            if [ "$attempt" = 30 ]; then cat "$RUNNER_TEMP/jervis-http-${{ matrix.label }}.log"; exit 1; fi
+            sleep 1
+          done
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/RealHttpAcceptance.php" "http://127.0.0.1:${HTTP_PORT}/"
+          kill "$HTTP_PID"
+          wait "$HTTP_PID" 2>/dev/null || true
+          trap - EXIT
+
           race_store() {
             local store="$1"
             local proof out_a out_b err_a err_b pid_a pid_b status_a status_b statuses outputs
@@ -246,7 +257,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: gd,zlib
+          extensions: gd,zlib,pdo_sqlite,sqlite3
           tools: composer:v2
           coverage: none
       - name: Use the same verified browser and audio artifacts accepted by package tests
