@@ -1,12 +1,29 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/TextSolverEvaluation.php';
+require_once __DIR__ . '/TextSolverEvaluation.php';
+require_once __DIR__ . '/LmStudioVisionSolver.php';
 
 $root = sys_get_temp_dir() . '/jervis-captcha-adversarial-' . bin2hex(random_bytes(8));
 if (!mkdir($root, 0777, true) && !is_dir($root)) throw new RuntimeException("Unable to create {$root}");
 
 try {
+    assertSameValue('http://127.0.0.1:1234', LmStudioVisionSolver::validateEndpoint('http://127.0.0.1:1234/'), 'LM Studio loopback normalization');
+    assertSameValue('http://[::1]:1234', LmStudioVisionSolver::validateEndpoint('http://[::1]'), 'LM Studio IPv6 loopback normalization');
+    assertSameValue('AB12CD', LmStudioVisionSolver::extractPrediction('The answer is AB12CD.'), 'LM Studio prediction extraction');
+    expectRuntime(
+        static fn () => LmStudioVisionSolver::validateEndpoint('https://example.com:1234'),
+        'plain HTTP on loopback',
+    );
+    expectRuntime(
+        static fn () => LmStudioVisionSolver::validateEndpoint('http://192.0.2.10:1234'),
+        'numeric loopback address',
+    );
+    expectRuntime(
+        static fn () => LmStudioVisionSolver::validateEndpoint('http://localhost:1234'),
+        'numeric loopback address',
+    );
+
     $records = [];
     foreach ([
         ['standard', 'original', 'AB12'],
