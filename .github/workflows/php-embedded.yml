@@ -10,6 +10,7 @@ on:
       - 'web/**'
       - 'internal/captcha/audio_samples.go'
       - 'tests/consumers/laravel/**'
+      - 'tests/performance/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -27,6 +28,7 @@ on:
       - 'web/**'
       - 'internal/captcha/audio_samples.go'
       - 'tests/consumers/laravel/**'
+      - 'tests/performance/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
@@ -152,7 +154,7 @@ jobs:
           php scripts/check-composer-manifests.php
           composer validate --strict
           (cd packages/php && composer validate --strict)
-          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel -name '*.php' -print0 | xargs -0 -n1 php -l
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel tests/performance -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Pin Laravel generation under package test
         env:
           LARAVEL_CONSTRAINT: ${{ matrix.laravel }}

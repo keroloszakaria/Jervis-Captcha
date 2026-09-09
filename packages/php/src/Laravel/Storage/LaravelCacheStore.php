@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace Jervis\Captcha\Laravel\Storage;
 
 use Illuminate\Cache\CacheManager;
+use Illuminate\Cache\DatabaseStore;
+use Illuminate\Cache\FileStore;
+use Illuminate\Cache\RedisStore;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Jervis\Captcha\Contracts\Store;
 use RuntimeException;
@@ -12,6 +15,8 @@ final class LaravelCacheStore implements Store
 {
     private const LOCK_SECONDS = 15;
     private const LOCK_WAIT_SECONDS = 2;
+    private const FAST_LOCK_RETRY_MILLISECONDS = 10;
+    private const FILE_LOCK_RETRY_MILLISECONDS = 250;
 
     public function __construct(
         private readonly CacheManager $cache,
@@ -21,6 +26,20 @@ final class LaravelCacheStore implements Store
 
     private function repository() { return $this->cache->store($this->storeName); }
     private function key(string $key): string { return $this->prefix . $key; }
+
+    private function blockingLock(object $repository, string $name): object
+    {
+        $lock = $repository->lock($name, self::LOCK_SECONDS);
+        $store = method_exists($repository, 'getStore') ? $repository->getStore() : null;
+        if (method_exists($lock, 'betweenBlockedAttemptsSleepFor')) {
+            if ($store instanceof RedisStore || $store instanceof DatabaseStore) {
+                $lock->betweenBlockedAttemptsSleepFor(self::FAST_LOCK_RETRY_MILLISECONDS);
+            } elseif ($store instanceof FileStore) {
+                $lock->betweenBlockedAttemptsSleepFor(self::FILE_LOCK_RETRY_MILLISECONDS);
+            }
+        }
+        return $lock;
+    }
 
     private function putOrFail(object $repository, string $key, mixed $value, int $ttlSeconds): void
     {
@@ -34,7 +53,7 @@ final class LaravelCacheStore implements Store
         $repo = $this->repository();
         $key = $this->key('session:' . $id);
         try {
-            $repo->lock($key . ':lock', self::LOCK_SECONDS)->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $key, $state, $ttlSeconds): void {
+            $this->blockingLock($repo, $key . ':lock')->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $key, $state, $ttlSeconds): void {
                 if ($repo->has($key)) throw new RuntimeException('duplicate CAPTCHA session');
                 $this->putOrFail($repo, $key, $state, $ttlSeconds);
             });
@@ -54,7 +73,7 @@ final class LaravelCacheStore implements Store
         $repo = $this->repository();
         $key = $this->key('session:' . $id);
         try {
-            return $repo->lock($key . ':lock', self::LOCK_SECONDS)->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $key, $ttlSeconds, $callback): mixed {
+            return $this->blockingLock($repo, $key . ':lock')->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $key, $ttlSeconds, $callback): mixed {
                 $state = $repo->get($key);
                 $result = $callback(is_array($state) ? $state : null);
                 if (!is_array($result)) throw new RuntimeException('Invalid CAPTCHA state transaction result');
@@ -78,7 +97,7 @@ final class LaravelCacheStore implements Store
         $bucket = intdiv(time(), $windowSeconds);
         $cacheKey = $this->key('limit:' . hash('sha256', $key) . ':' . $bucket);
         try {
-            return $repo->lock($cacheKey . ':lock', self::LOCK_SECONDS)->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $cacheKey, $limit, $windowSeconds): bool {
+            return $this->blockingLock($repo, $cacheKey . ':lock')->block(self::LOCK_WAIT_SECONDS, function () use ($repo, $cacheKey, $limit, $windowSeconds): bool {
                 $count = (int) $repo->get($cacheKey, 0) + 1;
                 $this->putOrFail($repo, $cacheKey, $count, $windowSeconds + 2);
                 return $count <= $limit;

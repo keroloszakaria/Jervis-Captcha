@@ -15,9 +15,12 @@ final class LimitCaptchaPayload
     {
         $length = $request->server('CONTENT_LENGTH');
         if ($length !== null && $length !== '') {
-            if (!is_numeric($length) || (int) $length < 0 || (int) $length > self::MAX_BYTES) {
+            if (!ctype_digit((string) $length) || (int) $length > self::MAX_BYTES) {
                 return response()->json(['code' => 'payload_too_large'], 413);
             }
+        } elseif (strlen($request->getContent()) > self::MAX_BYTES) {
+            // Covers chunked/no-Content-Length requests at the application boundary.
+            return response()->json(['code' => 'payload_too_large'], 413);
         }
 
         return $next($request);

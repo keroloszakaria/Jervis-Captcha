@@ -71,6 +71,16 @@ final class DoctorCommand extends Command
         if (!$cacheReady) {
             $this->warn('Use a persistent Laravel cache store with atomic locks. The array/null stores are not valid CAPTCHA state stores.');
         }
+        if ($cacheReady) {
+            $normalizedStore = strtolower($cacheStore);
+            if ($normalizedStore === 'file') {
+                $this->comment('Cache guidance: file is supported for single-node / low-concurrency use; prefer Redis for concurrent or multi-node production traffic.');
+            } elseif ($normalizedStore === 'database') {
+                $this->comment('Cache guidance: database is supported for moderate shared-state workloads; prefer Redis for high-concurrency or multi-node traffic.');
+            } elseif ($normalizedStore === 'redis') {
+                $this->comment('Cache guidance: Redis is the recommended embedded store for concurrent and multi-node production traffic.');
+            }
+        }
         if (!RequestLimiter::configurationValid()) {
             $this->warn('Request budgets must be integers between 1 and 100000 requests per minute.');
         }

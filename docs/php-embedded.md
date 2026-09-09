@@ -136,7 +136,9 @@ Defaults:
 
 The per-binding key is derived from the trusted Laravel session, not a browser-provided identifier. Values outside `1..100000` or values with incorrect PHP types are invalid configuration and verification fails closed; `jervis-captcha:doctor` reports the problem.
 
-All package-owned verification POST routes also have a fixed **32 KiB request-body guard** before controller/challenge logic. The answer endpoint then validates a bounded schema: only `text`, `x`, `y`, `angle` and up to three `points` are accepted, with small numeric/text limits and a bounded numeric PoW nonce. These controls supplement normal application/WAF/rate-limit controls; they do not replace them.
+All package-owned verification POST routes also have a fixed **32 KiB request-body guard** before controller/challenge logic. Declared `Content-Length` values are rejected when malformed or oversized, and requests without a declared length (for example chunked transfer at the HTTP layer) are checked against the actual application-visible body before controller execution. The answer endpoint then validates a bounded schema: only `text`, `x`, `y`, `angle` and up to three `points` are accepted, with small numeric/text limits and a bounded numeric PoW nonce.
+
+This Laravel guard is an **application-boundary** check, not protection against bytes already buffered by the web server/PHP SAPI. Production deployments must also configure an equivalent or tighter request-body limit in Nginx, Apache, IIS/reverse proxies or the platform ingress so oversized bodies are rejected before PHP-FPM/Apache PHP allocates or buffers them. These controls supplement normal application/WAF/rate-limit controls; they do not replace them.
 
 ## State and atomicity
 
@@ -146,9 +148,22 @@ Rendered PNG/WAV challenge payloads are returned to the requesting browser but a
 
 Use a persistent, lock-capable cache. The `array` and `null` stores are rejected by `jervis-captcha:doctor` because CAPTCHA state must survive across requests. On multi-node deployments, all nodes must use the same shared lock-capable cache backend; independent local stores are unsafe for one-use proofs.
 
+Store guidance: use **File** only for single-node, low-concurrency deployments; use **Database** for moderate shared-state deployments where the application's database is the operational choice; use **Redis** for high-concurrency or multi-node deployments. Jervis keeps File-store lock polling conservative because aggressive retry polling can cause filesystem-lock failures on Windows. Redis and Database stores use a shorter lock retry interval while preserving the same lock TTL, acquisition deadline and atomic critical sections.
+
 The focused acceptance workflow is configured to run cross-process one-use-proof races against Laravel **file, database and Redis** cache stores. A passing release must demonstrate exactly one successful consume and one rejected replay for the same proof. Merely defining this CI job is not evidence that it passed.
 
 `php artisan jervis-captcha:doctor` checks PHP/GD/zlib, secure randomness, secret length, proof field name, route configuration, engine configuration, request budgets, embedded digit-audio/browser assets and a real cache lock/write/read cycle.
+
+### Reproducible development smoke
+
+The repository includes bounded, manual smoke tools. They report observations only; they do not impose timing thresholds or define production capacity/SLA:
+
+```bash
+php tests/performance/EmbeddedSmoke.php 20
+JERVIS_CONSUMER_ROOT=/path/to/laravel php tests/performance/LaravelWorkerSmoke.php click 20 worker-a file
+```
+
+For Redis, use the consumer application's configured Redis client, or set `JERVIS_SMOKE_REDIS_CLIENT` explicitly for the smoke environment. Database/SQLite runs require the consumer database/cache tables and the relevant PDO driver. Run true capacity tests behind the customer's real PHP-FPM/Apache/IIS/reverse-proxy stack before setting production budgets.
 
 ## Embedded audio
 
