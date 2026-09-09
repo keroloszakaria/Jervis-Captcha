@@ -82,10 +82,11 @@ final class ChallengeGenerator
         for ($i = 0; $i < strlen($answer); $i++) {
             imagestring($image, 5, 22 + ($i * 36) + random_int(-3, 3), 34 + random_int(-8, 8), $answer[$i], $dark);
         }
-        for ($i = 0; $i < ($antiAi ? 95 : 45); $i++) {
+        for ($i = 0; $i < ($antiAi ? 120 : 45); $i++) {
             $color = imagecolorallocatealpha($image, random_int(0, 255), random_int(0, 255), random_int(0, 255), random_int(45, 105));
             imagesetpixel($image, random_int(0, 259), random_int(0, 95), $color);
         }
+        if ($antiAi) $this->distortText($image);
 
         return [[
             'id' => self::token(),
@@ -93,6 +94,34 @@ final class ChallengeGenerator
             'prompt' => 'Enter the characters shown',
             'image' => $this->png($image),
         ], ['text' => $answer]];
+    }
+
+    private function distortText(GdImage $image): void
+    {
+        imagesetthickness($image, 2);
+        for ($curve = 0; $curve < 3; $curve++) {
+            $ink = imagecolorallocatealpha($image, random_int(45, 105), random_int(55, 120), random_int(80, 145), random_int(35, 65));
+            $baseY = 30 + ($curve * 16) + random_int(-3, 3);
+            $amplitude = random_int(4, 8);
+            $period = random_int(18, 28);
+            $phase = random_int(0, 628) / 100;
+            $previousX = 8;
+            $previousY = $baseY + (int) round($amplitude * sin(($previousX / $period) + $phase));
+            for ($x = 9; $x <= 252; $x++) {
+                $y = $baseY + (int) round($amplitude * sin(($x / $period) + $phase));
+                imageline($image, $previousX, $previousY, $x, $y, $ink);
+                $previousX = $x;
+                $previousY = $y;
+            }
+        }
+        imagesetthickness($image, 1);
+
+        $fragment = imagecolorallocatealpha($image, 30, 45, 70, 45);
+        for ($i = 0; $i < 18; $i++) {
+            $x = random_int(18, 242);
+            $y = random_int(22, 74);
+            imageline($image, $x, $y, $x + random_int(-7, 7), $y + random_int(-5, 5), $fragment);
+        }
     }
 
     private function slider(bool $freeDrag): array
