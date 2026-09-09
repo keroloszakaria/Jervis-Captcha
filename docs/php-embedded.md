@@ -219,4 +219,4 @@ No CDN or remote runtime download is required after deployment. Verify `SHA256SU
 
 The embedded PHP engine implements raster text, slider, free drag, rotation, ordered click, English digit audio, math, logic and bounded proof-of-work.
 
-`isAntiAI` remains an experimental hardening profile. It is not a claim that a challenge is AI-proof.
+`isAntiAI` remains an experimental hardening profile. It is not a claim that a challenge is AI-proof. A preliminary Windows Media OCR benchmark is available under `tests/adversarial/`; on one 50-sample-per-profile run with four preprocessing variants, standard text produced a 4% defender-worst exact rate and `isAntiAI` produced 2%. That single traditional OCR result is **insufficient** to promote the profile: modern VLMs, additional OCR families and human usability/accessibility cohorts remain required.

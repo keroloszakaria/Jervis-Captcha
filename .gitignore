@@ -28,3 +28,4 @@ packages/php/composer.lock
 /vendor/
 /composer.lock
 **/.phpunit.result.cache
+.adversarial-text-corpus/

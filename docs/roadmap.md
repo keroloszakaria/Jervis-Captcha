@@ -39,6 +39,7 @@ The same offline-installed Laravel 12 artifact was then exercised in headless Ch
 
 A bounded development load/resource smoke was also run locally. Direct procedural generation over 20 samples showed interactive raster challenges in roughly the 5–9 ms mean range on that machine (Click was the heaviest observed p95 at about 17 ms), with about 4 MiB CLI peak memory for the direct generator smoke. Under Laravel multi-process Click generation, Redis with four workers processed 80 session+issue flows at about 123 flows/second, with per-worker session+issue means around 10–15 ms and about 22 MiB peak memory per worker. SQLite-backed Database cache with two workers measured about 21.7 flows/second (roughly 68–80 ms/flow), while File cache with two workers measured about 15.1 flows/second (roughly 96–117 ms/flow). These are development-machine smoke numbers, not capacity/SLA claims. File-store retry polling remains conservative after aggressive polling reproduced Windows filesystem-lock errors; Redis and Database retain faster lock polling and all three stores re-passed the concurrent one-use-proof race.
 
+A preliminary **single-solver** text benchmark was also run with Windows Media OCR (`en-US`) over 50 fresh standard and 50 fresh `isAntiAI` text challenges, each tested as original PNG, 2x resize, JPEG quality 65 and grayscale/contrast preprocessing (400 solver attempts total). Windows OCR produced 4 exact matches across 200 standard attempts (2.0%) and 1 exact match across 200 `isAntiAI` attempts (0.5%). The defender-worst preprocessing variant reached 4% exact for standard and 2% for `isAntiAI`. This is not proof of AI resistance: it is one traditional OCR engine, variants reuse the same underlying challenges, and no human-usability or modern VLM cohort was measured. The benchmark harness is retained under `tests/adversarial/` so additional solvers can reuse the same corpus/evaluator.
 This local evidence is useful for development but **does not replace** hosted CI, the full browser/native matrix or production/customer acceptance below.
 
 ## Must be verified before a customer production rollout
@@ -49,7 +50,7 @@ This local evidence is useful for development but **does not replace** hosted CI
 - [ ] Perform load/resource-exhaustion tests for PHP-FPM workers, GD image generation, audio generation, PoW, session creation and invalid-token traffic; tune defaults from measured results.
 - [ ] Customer-native Windows/macOS/Linux runtime acceptance and first-boot packet capture with Internet blocked for native deployments.
 - [ ] Customer reverse-proxy/TLS/ACL, OS/data permissions, secret provisioning and rollback recovery checks.
-- [ ] Independent security review, solver/adversarial benchmark and human usability/accessibility assessment.
+- [ ] Independent security review, **multi-solver OCR/VLM** adversarial benchmark and human usability/accessibility assessment. A preliminary Windows OCR benchmark exists but is not sufficient for this gate.
 - [ ] Owner's package licensing choice, release approval and an authenticated signing/update process. Checksums alone are not signatures.
 
 ## Explicitly not implemented
