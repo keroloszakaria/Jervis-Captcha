@@ -12,7 +12,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,15 +49,31 @@ jobs:
         run: npm run typecheck
       - name: Web unit tests
         run: npm test -- --reporter=json --outputFile=web-test.json
-      - name: Build embedded offline widget
+      - name: Build embedded offline widget and package assets
         run: npm run build
+      - name: Verify embedded audio stays synchronized with native generated audio
+        shell: bash
+        run: |
+          test -s packages/php/resources/audio/digits.asset
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
+      - name: Validate frontend npm package
+        shell: bash
+        run: |
+          test -s packages/frontend/dist/jervis-captcha.js
+          test -s packages/frontend/dist/index.d.ts
+          npm pack ./packages/frontend --dry-run
+          mkdir -p dist/npm
+          npm pack ./packages/frontend --pack-destination dist/npm
       - name: Go tests with race detector and real SQLite
         shell: bash
-        run: go test -race -count=1 -json ./... | tee go-test.jsonl
+        run: go test -mod=readonly -race -count=1 -json ./... | tee go-test.jsonl
       - name: Go static analysis
-        run: go vet ./...
-      - name: PHP and Python validation
+        run: go vet -mod=readonly ./...
+      - name: PHP package syntax and existing SDK validation
         run: |
+          php scripts/check-composer-manifests.php
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel tests/adversarial -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/adversarial/SelfTest.php
           php -l sdk/php/JervisCaptcha.php
           python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
       - name: Build .NET SDK
@@ -67,7 +83,7 @@ jobs:
         run: |
           mkdir -p .sdk-build
           npx tsc sdk/node/client.ts --target ES2022 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --declaration --outDir .sdk-build
-          go build -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
+          go build -mod=readonly -o .sdk-build/jervis-captcha ./cmd/jervis-captcha
           dotnet build tests/consumers/dotnet/Consumer.csproj --configuration Release --nologo
           python3 scripts/test-sdk-integration.py .sdk-build/jervis-captcha
       - name: Build local documentation
@@ -83,7 +99,7 @@ jobs:
           for target in linux-amd64 windows-amd64 darwin-arm64; do
             os="${target%-*}"; arch="${target#*-}"; ext=""; [ "$os" != windows ] || ext=".exe"
             mkdir -p "dist/releases/jervis-captcha-$target"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w -buildid=' -o "dist/releases/jervis-captcha-$target/jervis-captcha$ext" ./cmd/jervis-captcha
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -mod=readonly -trimpath -ldflags='-s -w -buildid=' -o "dist/releases/jervis-captcha-$target/jervis-captcha$ext" ./cmd/jervis-captcha
           done
           python3 scripts/release.py
       - name: Record validation evidence
@@ -109,6 +125,17 @@ jobs:
             dist/releases/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
+          name: package-candidates
+          path: |
+            dist/npm/*.tgz
+            composer.json
+            packages/php/composer.json
+            packages/php/src/
+            packages/php/config/
+            packages/php/resources/
+            packages/php/README.md
+      - uses: actions/upload-artifact@v4
+        with:
           name: verified-generated-files
           path: |
             go.mod
@@ -116,7 +143,40 @@ jobs:
             package-lock.json
             internal/captcha/audio_samples.go
             internal/web/dist/
+            packages/php/resources/audio/
+            packages/php/resources/dist/
+            packages/frontend/dist/
             validation.json
+  php-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.4']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd,zlib
+          tools: composer:v2
+          coverage: none
+      - name: Validate Composer package manifests
+        run: |
+          php scripts/check-composer-manifests.php
+          composer validate --strict
+          (cd packages/php && composer validate --strict)
+      - name: Resolve a supported Laravel generation and run package tests
+        run: |
+          composer update --no-interaction --prefer-dist --no-progress
+          composer audit
+          composer test
+          composer show laravel/framework
+          composer show orchestra/testbench
+
   native:
     needs: validate
     strategy:
@@ -161,7 +221,7 @@ jobs:
             airgap-validation.json
   persist-generated:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/codex/')
-    needs: [validate, native]
+    needs: [validate, native, php-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -184,8 +244,8 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add go.mod go.sum package-lock.json internal/captcha/audio_samples.go internal/web/dist validation.json
+          git add go.mod go.sum package-lock.json internal/captcha/audio_samples.go internal/web/dist packages/php/resources/audio packages/php/resources/dist packages/frontend/dist validation.json
           if ! git diff --cached --quiet; then
-            git commit -m 'build: lock dependencies and embed verified offline assets'
+            git commit -m 'build: lock dependencies and embed verified package assets'
             git push origin "HEAD:$BRANCH_NAME"
           fi

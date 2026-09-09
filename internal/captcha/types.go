@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0-alpha.1"
+const Version = "0.2.0-alpha.1"
 
 var Kinds = []string{"text", "slider", "drag", "rotate", "click", "audio", "math", "logic", "pow"}
 var ErrNotFound = errors.New("not found")
@@ -31,7 +31,7 @@ type Policy struct {
 }
 
 func DefaultPolicy() Policy {
-	return Policy{Types: []string{"text", "slider", "rotate"}, IsAntiAI: true, WorkBits: 14, MinSolveMS: 400, SessionTTLSeconds: 300, ChallengeTTLSeconds: 120, ProofTTLSeconds: 60, MaxAttempts: 3, MaxRefreshes: 4, SessionsPerMinute: 120}
+	return Policy{Types: []string{"slider", "drag", "rotate", "click"}, IsAntiAI: true, WorkBits: 14, MinSolveMS: 400, SessionTTLSeconds: 300, ChallengeTTLSeconds: 120, ProofTTLSeconds: 60, MaxAttempts: 3, MaxRefreshes: 4, SessionsPerMinute: 120}
 }
 func (p Policy) Validate() error {
 	if len(p.Types) == 0 || len(p.Types) > len(Kinds) {
@@ -46,6 +46,9 @@ func (p Policy) Validate() error {
 	}
 	if p.WorkBits < 0 || p.WorkBits > 20 || ((p.IsAntiAI || seen["pow"]) && p.WorkBits < 12) {
 		return errors.New("workBits must be 0..20, and at least 12 for antiAI/pow")
+	}
+	if p.IsAntiAI && seen["text"] {
+		return errors.New("text cannot be enabled in the primary antiAI challenge pool")
 	}
 	if p.IsAntiAI && (seen["math"] || seen["logic"]) {
 		return errors.New("math/logic cannot be enabled in an antiAI policy")

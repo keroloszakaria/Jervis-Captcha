@@ -1,0 +1,71 @@
+<?php
+declare(strict_types=1);
+
+namespace Jervis\Captcha\Laravel\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Jervis\Captcha\CaptchaException;
+use Jervis\Captcha\Contracts\BindingResolver;
+use Jervis\Captcha\Engine\EmbeddedEngine;
+use Jervis\Captcha\Laravel\Support\EmbeddedConfig;
+use Symfony\Component\HttpFoundation\Response;
+
+final readonly class VerifyCaptcha
+{
+    public function __construct(private EmbeddedEngine $engine, private BindingResolver $binding) {}
+
+    public function handle(Request $request, Closure $next, string $action): Response
+    {
+        try {
+            $field = EmbeddedConfig::fieldName();
+        } catch (\Throwable $e) {
+            report($e);
+            return $this->unavailable($request, 'jervisCaptchaToken');
+        }
+
+        $token = (string) ($request->header('X-Jervis-Captcha') ?: $request->input($field, ''));
+        try {
+            if ($token === '' || !$this->engine->consume($token, $action, $this->binding->resolve($request))) {
+                throw new CaptchaException('invalid_proof', 403);
+            }
+        } catch (CaptchaException $e) {
+            // `invalid_proof` is the only expected caller-correctable failure at
+            // this boundary. Session/binding/configuration exceptions indicate
+            // verification infrastructure is unavailable and must fail closed.
+            if ($e->errorCode !== 'invalid_proof') {
+                report($e);
+                return $this->unavailable($request, $field);
+            }
+            return $this->invalid($request, $field);
+        } catch (\Throwable $e) {
+            report($e);
+            return $this->unavailable($request, $field);
+        }
+
+        return $next($request);
+    }
+
+    private function invalid(Request $request, string $field): Response
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'CAPTCHA verification failed',
+                'errors' => [$field => ['CAPTCHA verification failed.']],
+            ], 422);
+        }
+        throw ValidationException::withMessages([$field => 'CAPTCHA verification failed.']);
+    }
+
+    private function unavailable(Request $request, string $field): Response
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'CAPTCHA verification is temporarily unavailable',
+                'errors' => [$field => ['CAPTCHA verification is temporarily unavailable.']],
+            ], 503);
+        }
+        return response('CAPTCHA verification is temporarily unavailable.', 503);
+    }
+}

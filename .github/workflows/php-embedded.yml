@@ -1,0 +1,357 @@
+name: Embedded PHP package
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - 'composer.json'
+      - 'packages/php/**'
+      - 'packages/frontend/**'
+      - 'web/**'
+      - 'internal/captcha/audio_samples.go'
+      - 'tests/consumers/laravel/**'
+      - 'tests/adversarial/**'
+      - 'tests/performance/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'scripts/copy-assets.mjs'
+      - 'scripts/check-composer-manifests.php'
+      - 'scripts/package-embedded.py'
+      - '.github/workflows/php-embedded.yml'
+  pull_request:
+    paths:
+      - 'composer.json'
+      - 'packages/php/**'
+      - 'packages/frontend/**'
+      - 'web/**'
+      - 'internal/captcha/audio_samples.go'
+      - 'tests/consumers/laravel/**'
+      - 'tests/adversarial/**'
+      - 'tests/performance/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - 'vitest.config.ts'
+      - 'scripts/copy-assets.mjs'
+      - 'scripts/check-composer-manifests.php'
+      - 'scripts/package-embedded.py'
+      - '.github/workflows/php-embedded.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedded-php-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Pin dependency resolver
+        run: npm install --global npm@11.19.1
+      - name: Install locked browser dependencies
+        run: npm ci
+      - name: Typecheck and unit test package source
+        run: |
+          npm run typecheck
+          npm test
+      - name: Build the exact package browser artifacts
+        run: npm run build
+      - name: Verify embedded audio is synchronized with the native engine
+        run: |
+          test -s packages/php/resources/audio/digits.asset
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
+      - name: Validate npm distribution candidate
+        run: |
+          test -s packages/frontend/dist/jervis-captcha.js
+          test -s packages/frontend/dist/index.d.ts
+          npm pack ./packages/frontend --dry-run
+      - name: Stage artifacts with stable repository-relative paths
+        shell: bash
+        run: |
+          rm -rf .embedded-package-assets
+          mkdir -p .embedded-package-assets/packages/php/resources .embedded-package-assets/packages/frontend
+          cp -a packages/php/resources/dist .embedded-package-assets/packages/php/resources/dist
+          cp -a packages/php/resources/audio .embedded-package-assets/packages/php/resources/audio
+          cp -a packages/frontend/dist .embedded-package-assets/packages/frontend/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: .embedded-package-assets/
+          retention-days: 3
+          if-no-files-found: error
+
+  php-package:
+    needs: web-package
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.2'
+            label: '12'
+            laravel: '^12.40.0'
+            testbench: '^10.8'
+            app: '^12.0'
+          - php: '8.4'
+            label: '13'
+            laravel: '^13.23.0'
+            testbench: '^11.2'
+            app: '^13.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: .embedded-assets
+      - name: Replace checked-in fallback with the verified build under test
+        shell: bash
+        run: |
+          rm -rf packages/php/resources/dist packages/php/resources/audio packages/frontend/dist
+          mkdir -p packages/php/resources packages/frontend
+          cp -a .embedded-assets/packages/php/resources/dist packages/php/resources/dist
+          cp -a .embedded-assets/packages/php/resources/audio packages/php/resources/audio
+          cp -a .embedded-assets/packages/frontend/dist packages/frontend/dist
+          test -s packages/php/resources/dist/jervis-captcha.js
+          test -s packages/php/resources/audio/digits.asset
+          test -s packages/frontend/dist/jervis-captcha.js
+          test -s packages/frontend/dist/index.d.ts
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd,zlib,redis,pdo_sqlite,sqlite3
+          tools: composer:v2
+          coverage: none
+      - name: Validate manifests and PHP syntax
+        run: |
+          php scripts/check-composer-manifests.php
+          composer validate --strict
+          (cd packages/php && composer validate --strict)
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel tests/performance tests/adversarial -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/adversarial/SelfTest.php
+      - name: Pin Laravel generation under package test
+        env:
+          LARAVEL_CONSTRAINT: ${{ matrix.laravel }}
+          TESTBENCH_CONSTRAINT: ${{ matrix.testbench }}
+        run: |
+          composer require --dev --no-update "laravel/framework:${LARAVEL_CONSTRAINT}" "orchestra/testbench:${TESTBENCH_CONSTRAINT}"
+          composer update --no-interaction --prefer-dist --no-progress --with-all-dependencies
+      - name: Audit Composer dependencies
+        run: composer audit
+      - name: Run embedded engine and Testbench integration tests
+        run: composer test
+      - name: Install the package into a fresh Laravel application
+        shell: bash
+        env:
+          LARAVEL_APP_CONSTRAINT: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-laravel-${{ matrix.label }}"
+          rm -rf "$CONSUMER"
+          composer create-project laravel/laravel "$CONSUMER" "$LARAVEL_APP_CONSTRAINT" --no-interaction --prefer-dist --no-progress
+          cd "$CONSUMER"
+          composer config repositories.jervis path "$GITHUB_WORKSPACE"
+          composer require 'jervis/captcha:@dev' --no-interaction --prefer-dist --no-progress --with-all-dependencies
+          cat >> .env <<'EOF'
+          CACHE_STORE=file
+          SESSION_DRIVER=file
+          JERVIS_CAPTCHA_STORE=file
+          JERVIS_CAPTCHA_SECRET=consumer-fixture-secret-0123456789abcdef
+          REDIS_CLIENT=phpredis
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
+          DB_CONNECTION=sqlite
+          EOF
+          mkdir -p database
+          touch database/database.sqlite
+          printf 'DB_DATABASE=%s/database/database.sqlite\n' "$CONSUMER" >> .env
+          php artisan config:clear
+          php artisan migrate --force
+          php artisan jervis-captcha:install --skip-doctor
+          php artisan jervis-captcha:doctor
+          php artisan route:list --path=jervis-captcha
+      - name: Exercise final Composer ZIP and frontend TGZ in Chromium with zero egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-offline-consumer"
+          FRONTEND="$RUNNER_TEMP/jervis-captcha-frontend-artifact"
+          rm -rf "$FRONTEND"
+          mkdir -p "$FRONTEND" "$CONSUMER/public/__jervis/frontend"
+          tar -xzf dist/embedded/jervis-captcha-frontend-*.tgz -C "$FRONTEND"
+          cp "$FRONTEND/package/dist/jervis-captcha.js" "$CONSUMER/public/__jervis/frontend/jervis-captcha.js"
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php tests/consumers/laravel/PrepareHttpConsumer.php
+          cd "$CONSUMER"
+          php artisan config:clear
+          php artisan serve --host=127.0.0.1 --port=18190 --no-reload >"$RUNNER_TEMP/jervis-packaged-browser.log" 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18190/__jervis/csrf >/dev/null; then break; fi
+            if [ "$attempt" = 30 ]; then cat "$RUNNER_TEMP/jervis-packaged-browser.log"; exit 1; fi
+            sleep 1
+          done
+          cd "$GITHUB_WORKSPACE"
+          node tests/consumers/laravel/PackagedBrowserAcceptance.mjs http://127.0.0.1:18190/
+          node tests/consumers/laravel/PackagedSpaAcceptance.mjs http://127.0.0.1:18190/
+          kill "$HTTP_PID"
+          wait "$HTTP_PID" 2>/dev/null || true
+          trap - EXIT
+          cp "$GITHUB_WORKSPACE/tests/consumers/laravel/JervisCaptchaConsumerTest.php" tests/Feature/JervisCaptchaConsumerTest.php
+          php artisan test tests/Feature/JervisCaptchaConsumerTest.php
+
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/PrepareHttpConsumer.php"
+          php artisan config:clear
+          HTTP_PORT="181${{ matrix.label }}"
+          php artisan serve --host=127.0.0.1 --port="$HTTP_PORT" --no-reload >"$RUNNER_TEMP/jervis-http-${{ matrix.label }}.log" 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:${HTTP_PORT}/__jervis/csrf" >/dev/null; then break; fi
+            if [ "$attempt" = 30 ]; then cat "$RUNNER_TEMP/jervis-http-${{ matrix.label }}.log"; exit 1; fi
+            sleep 1
+          done
+          JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/RealHttpAcceptance.php" "http://127.0.0.1:${HTTP_PORT}/"
+          kill "$HTTP_PID"
+          wait "$HTTP_PID" 2>/dev/null || true
+          trap - EXIT
+
+          race_store() {
+            local store="$1"
+            local proof out_a out_b err_a err_b pid_a pid_b status_a status_b statuses outputs
+            proof="$(JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" prepare)"
+            [[ "$proof" =~ ^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$ ]]
+            out_a="$RUNNER_TEMP/race-${store}-a.out"; err_a="$RUNNER_TEMP/race-${store}-a.err"
+            out_b="$RUNNER_TEMP/race-${store}-b.out"; err_b="$RUNNER_TEMP/race-${store}-b.err"
+            set +e
+            JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" consume "$proof" >"$out_a" 2>"$err_a" & pid_a=$!
+            JERVIS_CONSUMER_ROOT="$CONSUMER" php "$GITHUB_WORKSPACE/tests/consumers/laravel/ProofConsumeRace.php" "$store" consume "$proof" >"$out_b" 2>"$err_b" & pid_b=$!
+            wait "$pid_a"; status_a=$?
+            wait "$pid_b"; status_b=$?
+            set -e
+            cat "$err_a" "$err_b" >&2 || true
+            statuses="$(printf '%s\n%s\n' "$status_a" "$status_b" | sort -n | tr '\n' ' ')"
+            outputs="$(cat "$out_a" "$out_b" | sort | tr '\n' ' ')"
+            test "$statuses" = '0 2 '
+            test "$outputs" = 'consumed rejected '
+          }
+
+          race_store file
+          race_store database
+          race_store redis
+      - name: Record resolved framework versions
+        if: always()
+        run: |
+          composer show laravel/framework || true
+          composer show orchestra/testbench || true
+
+  offline-distribution:
+    needs: [web-package, php-package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-package-assets
+          path: .embedded-assets
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gd,zlib,pdo_sqlite,sqlite3
+          tools: composer:v2
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install packaged-browser acceptance runtime
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Use the same verified browser and audio artifacts accepted by package tests
+        shell: bash
+        run: |
+          rm -rf packages/php/resources/dist packages/php/resources/audio packages/frontend/dist
+          mkdir -p packages/php/resources packages/frontend
+          cp -a .embedded-assets/packages/php/resources/dist packages/php/resources/dist
+          cp -a .embedded-assets/packages/php/resources/audio packages/php/resources/audio
+          cp -a .embedded-assets/packages/frontend/dist packages/frontend/dist
+          cmp -s packages/php/resources/audio/digits.asset internal/captcha/audio_samples.go
+      - name: Build offline Composer and frontend archives
+        run: python3 scripts/package-embedded.py
+      - name: Validate archive structure and checksums
+        shell: bash
+        run: |
+          test -s dist/embedded/manifest.json
+          test -s dist/embedded/SHA256SUMS
+          (cd dist/embedded && sha256sum -c SHA256SUMS)
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'composer.json'
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/dist/jervis-captcha.js'
+          unzip -l dist/embedded/jervis-captcha-php-*.zip | grep -q 'resources/audio/digits.asset'
+          tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/package.json'
+          tar -tzf dist/embedded/jervis-captcha-frontend-*.tgz | grep -q 'package/dist/jervis-captcha.js'
+      - name: Install the PHP ZIP from a local artifact repository with Composer networking disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONSUMER="$RUNNER_TEMP/jervis-captcha-offline-consumer"
+          ARTIFACTS="$RUNNER_TEMP/jervis-captcha-composer-artifacts"
+          VERSION="$(python3 -c 'import json; print(json.load(open("dist/embedded/manifest.json", encoding="utf-8"))["version"])')"
+          rm -rf "$CONSUMER" "$ARTIFACTS"
+          mkdir -p "$ARTIFACTS"
+          cp dist/embedded/jervis-captcha-php-*.zip "$ARTIFACTS/"
+          composer create-project laravel/laravel "$CONSUMER" '^12.0' --no-interaction --prefer-dist --no-progress
+          cd "$CONSUMER"
+          composer config repositories.packagist.org false
+          composer config repositories.jervis artifact "$ARTIFACTS"
+          COMPOSER_DISABLE_NETWORK=1 composer require "jervis/captcha:${VERSION}" --no-interaction --no-progress --no-audit
+          test -s vendor/jervis/captcha/resources/dist/jervis-captcha.js
+          test -s vendor/jervis/captcha/resources/audio/digits.asset
+          cat >> .env <<'EOF'
+          CACHE_STORE=file
+          SESSION_DRIVER=file
+          JERVIS_CAPTCHA_STORE=file
+          JERVIS_CAPTCHA_SECRET=offline-consumer-secret-0123456789abcdef
+          EOF
+          php artisan config:clear
+          php artisan jervis-captcha:install --skip-doctor
+          php artisan jervis-captcha:doctor
+          php artisan route:list --path=jervis-captcha
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedded-offline-distributions
+          path: dist/embedded/
+          retention-days: 30
+          if-no-files-found: error

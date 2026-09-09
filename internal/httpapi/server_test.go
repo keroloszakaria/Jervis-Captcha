@@ -26,6 +26,7 @@ func handler(t *testing.T, store captcha.Store) http.Handler {
 	p := captcha.DefaultPolicy()
 	p.IsAntiAI = false
 	p.MinSolveMS = 0
+	p.Types = []string{"text"}
 	e, err := captcha.New(store, []captcha.Site{{Key: "local", Secret: secret, Origins: []string{"http://localhost"}, Actions: map[string]captcha.Policy{"signup": p}}})
 	if err != nil {
 		t.Fatal(err)

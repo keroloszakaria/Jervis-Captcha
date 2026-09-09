@@ -16,7 +16,7 @@ async function answer(page: Page, kind: string) {
   if (['text', 'math', 'logic', 'audio'].includes(kind)) await page.locator('jervis-captcha input[type=text]').fill(a.text);
   for (const [field, label] of [['x', 'Horizontal position'], ['y', 'Vertical position'], ['angle', 'Rotation angle']]) {
     if ((kind === 'slider' && field === 'x') || (kind === 'drag' && field !== 'angle') || (kind === 'rotate' && field === 'angle')) {
-      await page.getByRole('slider', { name: label!, exact: true }).evaluate((node: HTMLInputElement, value) => { node.value = String(value); node.dispatchEvent(new Event('input', { bubbles: true })); }, a[field!]);
+      await page.getByLabel(label!).evaluate((node: HTMLInputElement, value) => { node.value = String(value); node.dispatchEvent(new Event('input', { bubbles: true })); }, a[field!]);
     }
   }
   if (kind === 'click') {
@@ -27,10 +27,8 @@ async function answer(page: Page, kind: string) {
   await expect(page.locator('jervis-captcha .success')).toBeVisible();
 }
 for (const kind of ['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math', 'logic']) {
-  test(`${kind}: real engine, widget and protected host action`, async ({ page }, testInfo) => {
-    await select(page, kind);
-    await page.locator('jervis-captcha').screenshot({ path: testInfo.outputPath('challenge.png') });
-    await answer(page, kind);
+  test(`${kind}: real engine, widget and protected host action`, async ({ page }) => {
+    await select(page, kind); await answer(page, kind);
     const proof = await page.locator('#captcha').evaluate((node: any) => node.token);
     await page.getByRole('button', { name: 'Submit protected action' }).click();
     await expect(page.locator('#result')).toContainText('Protected action accepted');
@@ -38,6 +36,42 @@ for (const kind of ['text', 'slider', 'drag', 'rotate', 'click', 'audio', 'math'
     expect(replay.status()).toBe(403);
   });
 }
+test('managed frontend package defaults to the embedded Laravel endpoint and renews internally', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const element = document.createElement('jervis-captcha') as any;
+    element.id = 'managed-captcha'; element.action = 'demo'; element.presentation = 'invisible';
+    document.body.append(element);
+  });
+  const first = await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).toMatch(/^[a-f0-9]{64}\.[A-Za-z0-9_-]{43}$/).then(() => page.locator('#managed-captcha').evaluate((node: any) => node.token));
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
+  await page.locator('#managed-captcha').evaluate((node: any) => node.renew());
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.token)).not.toBe(first);
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
+  await expect.poll(() => page.locator('#managed-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
+});
+
+test('managed widget switches to a server-approved accessible audio challenge', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const element = document.createElement('jervis-captcha') as any;
+    element.id = 'accessible-captcha'; element.action = 'accessible-demo';
+    document.body.append(element);
+  });
+  await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
+  await expect(page.locator('#accessible-captcha audio')).toHaveCount(0);
+  const accessible = page.getByRole('button', { name: 'Use an accessible challenge', exact: true });
+  await expect(accessible).toBeVisible();
+  await accessible.click();
+  await expect(page.locator('#accessible-captcha audio')).toBeVisible();
+  await expect(page.locator('#accessible-captcha input[type=text]')).toBeVisible();
+  await expect(accessible).toHaveCount(0);
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.name)).toBe('fixtureCaptchaProof');
+  await expect.poll(() => page.locator('#accessible-captcha').evaluate((node: any) => node.sessionToken)).toBe('');
+});
+
 test('bounded work runs offline and consumes a proof', async ({ page }) => {
   await page.goto('/'); await page.locator('#presentation').selectOption('invisible'); await page.locator('#kind').selectOption('pow');
   await expect(page.getByRole('button', { name: 'Submit protected action' })).toBeEnabled();
@@ -55,7 +89,7 @@ test('proof expiry clears form value and parent state', async ({ page }) => {
 test('Arabic RTL, keyboard control and reduced motion', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); await select(page, 'slider'); await page.locator('#locale').selectOption('ar');
   await expect(page.locator('jervis-captcha section')).toHaveAttribute('dir', 'rtl');
-  const range = page.getByRole('slider', { name: 'الموضع الأفقي', exact: true }); await range.focus(); await range.press('ArrowRight'); expect(await range.inputValue()).toBe('1');
+  const range = page.getByLabel('الموضع الأفقي'); await range.focus(); await range.press('ArrowRight'); expect(await range.inputValue()).toBe('1');
   await page.screenshot({ path: testInfo.outputPath('arabic-slider.png'), fullPage: true });
 });
 test('checkbox does not pass verification merely on click', async ({ page }) => {

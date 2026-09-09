@@ -1,0 +1,14 @@
+{
+  "solver": "tesseract-local",
+  "language": "eng",
+  "timeoutMs": 5000,
+  "command": [
+    "tesseract",
+    "{input}",
+    "stdout",
+    "--psm",
+    "7",
+    "-l",
+    "eng"
+  ]
+}

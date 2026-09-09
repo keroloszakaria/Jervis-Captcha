@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit colors="true"><testsuites><testsuite name="Jervis Captcha"><directory>tests</directory></testsuite></testsuites></phpunit>

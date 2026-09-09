@@ -4,27 +4,46 @@ The universal contract is a web component plus HTTP. There is no requirement for
 
 ## Browser basics
 
-Host the bundled `jervis-captcha.js` from your local engine/application. Use `<script type="module" src="/captcha/assets/jervis-captcha.js"></script>` or include the source module in your build. Assign `element.sessionToken = value`; this is deliberately a property, not a `session-token` attribute. Set `endpoint="/captcha/"` when using a reverse-proxy prefix.
+The browser package supports two server contracts without changing its challenge UI:
 
-Supported public properties: `endpoint`, `sessionToken`, `locale` (`en`/`ar`), `theme` (`light`/`dark`/`auto`), `presentation` (`inline`/`checkbox`/`invisible`), `disabled` and `name`. Methods: `start()`, `verify()`, `reset()`; getter: `token`. Events: `jervis-success` (proof), `jervis-error` (code), `jervis-reset`, `jervis-expired`, `jervis-renew`.
+- **Embedded Laravel mode:** set `action`. The widget creates its own package-managed same-origin session at `/jervis-captcha/`; set `endpoint` only for a customized Laravel prefix/base path.
+- **Native/universal mode:** the host backend creates a session and assigns `element.sessionToken`; this remains available for non-PHP and centralized deployments.
 
-A checkbox starts verification and does not itself pass it. Invisible mode only hides automatic PoW, never a required human challenge or an error. The widget clears its form value on reset/expiry/disconnection. On renewed sessions, clear any token cached by the parent as well. For an external submit handler, never rely solely on the component's validity; the backend still consumes the proof.
+Supported public properties: `endpoint`, `action`, `csrfToken`, `sessionToken`, `locale` (`en`/`ar`), `theme` (`light`/`dark`/`auto`), `presentation` (`inline`/`checkbox`/`invisible`), `disabled` and `name`. Methods: `start()`, `verify()`, `reset()`, `renew()`; getter: `token`. Events: `jervis-success` (proof), `jervis-error` (code), `jervis-reset`, `jervis-expired`, `jervis-renew`.
+
+For embedded Laravel on the same origin:
+
+```ts
+import '@jervis/captcha';
+```
+
+```html
+<jervis-captcha action="signup"></jervis-captcha>
+```
+
+A checkbox starts verification and does not itself pass it. Invisible mode only hides automatic PoW, never a required human challenge or an error. The backend still atomically consumes the final proof.
+
+### Accessible managed challenges
+
+The managed browser contract deliberately does **not** expose a public challenge-type selector. A user can ask the widget for an accessible alternative; the browser sends only `variant: "accessible"`. Laravel selects a concrete challenge from the server-owned `accessibilityTypes` policy. The default embedded policy uses the locally packaged English digit audio challenge.
+
+The session response exposes only `accessibilityAvailable: boolean`; it does not reveal the allowed type list or policy. If accessibility is disabled for an action (`accessibilityTypes: []`), the switch is not rendered and direct accessible-session requests fail closed. Browser requests attempting to provide `type`, `binding`, `policy`, or `isAntiAI` are rejected by the embedded Laravel endpoint.
 
 ## Vue and Nuxt
 
-Configure the Vue template compiler's `isCustomElement` for `jervis-captcha`. Load/register the component on the client; in Nuxt use a `.client.ts` plugin or a client-only asset loader. Use a template ref and assign `ref.value.sessionToken` after your backend session response. Listen with `@jervis-success="onSuccess"`, `@jervis-reset="clearToken"` and `@jervis-expired="clearToken"`. Do not put site secrets in public runtime config.
+Configure Vue's `isCustomElement` for `jervis-captcha` and import `@jervis/captcha` in a client-only plugin when using SSR. With embedded Laravel, render the custom element with `action="signup"`; no Vue composable or application-owned session request is required. Clear any application-cached proof on reset/expiry if you mirror the component value externally.
 
 ## React and Next.js
 
-Use a client component with an element ref. In an effect, load the local widget module, register native `addEventListener` handlers and assign the sessionToken property. Remove listeners in effect cleanup. This avoids assumptions about custom-event naming across React versions. Keep the private SDK and its secret exclusively in server routes; do not pass a configured server client into a client component.
+Use a client component that imports `@jervis/captcha` and renders the custom element. With embedded Laravel, `action` is sufficient on the default package prefix. Native-engine deployments may still set the `sessionToken` property from a trusted server route. Do not put backend secrets in React props or public configuration.
 
 ## Angular
 
-Load the locally served module once, add `CUSTOM_ELEMENTS_SCHEMA` to the component/module, and use `ViewChild` with `ElementRef<HTMLElement & { sessionToken: string }>` to assign the property. Listen to `(jervis-success)` and clear the form control on reset/expiry. A `ControlValueAccessor` package is not yet included; explicit event-to-form wiring is required. Instantiate only in the browser during SSR/hydration.
+Import/register the package once in the browser and add `CUSTOM_ELEMENTS_SCHEMA`. Embedded Laravel needs only `action` on the default package prefix; the Web Component owns session bootstrap and challenge orchestration. A dedicated `ControlValueAccessor` wrapper is not yet published; the element itself remains form-associated in browsers that support `ElementInternals`.
 
 ## HTML, Blade, Razor, Django, Svelte and other web frontends
 
-The same local module, property assignment and native events work without a UI-library dependency. Vanilla HTML is the primary browser acceptance fixture. SSR import safety and browser capability must be tested in the actual consuming application. Native Flutter/React Native screens need a separately validated WebView/native presentation; the web widget is not a native control.
+The same Web Component works without a UI-library dependency. In Laravel Blade prefer `<x-jervis-captcha action="signup" />`, which injects the local asset, relative same-origin endpoint and CSRF token. Other backends can import `@jervis/captcha` and use the native-engine session-token contract. Native Flutter/React Native screens still need a separately validated WebView/native presentation.
 
 ## Backend clients
 
@@ -35,12 +54,28 @@ The same local module, property assignment and native events work without a UI-l
 
 Other languages use the same OpenAPI contract directly. No SDK is required to start, and the engine is not reimplemented in every language.
 
-### Laravel pattern
+### Laravel embedded package
 
-Register the PHP client as a server-side container singleton using secrets from protected environment/configuration. Protect the session route and business form with Laravel's normal session/CSRF middleware. Derive binding from the server session (or an HMAC of it). The session endpoint returns only sessionToken and its relative lifetime. The business controller calls `verify($token, 'signup', $binding)` before any protected side effect and returns validation failure on false/exception. Do not create a public route that lets the browser choose arbitrary actions, bindings or policies.
+Prefer `jervis/captcha` instead of the legacy HTTP client when the engine should live inside Laravel. The Service Provider registers package-owned challenge routes, a lock-backed state store, Blade component and `jervis.captcha:<action>` middleware. The application does not call `verify()` manually. Browser-provided action names can select only a server-owned default/override policy; the browser cannot choose binding, TTL, answer, `isAntiAI`, or any secret.
+
+The older `sdk/php/JervisCaptcha.php` remains for PHP applications intentionally using the optional native Go service.
 
 ## Styles and CSP
 
 Customize `--jc-accent`, `--jc-bg`, `--jc-fg`, `--jc-muted`, `--jc-border`, plus the exposed `container` and `verify-button` CSS parts. Shadow DOM isolates widget styles. CSS/system fonts are local; no font service is used.
 
 Merge the widget's requirements with the host CSP: local scripts, local API connections, PNG `data:` images, WAV `data:` media, and the locally generated blob worker. Current dynamic positioning/inline styles require an appropriate style policy. Do not weaken the host script policy to `unsafe-eval` or `unsafe-inline`; neither is required by the widget.
+
+## Embedded Laravel mode
+
+For Laravel applications that should not run a separate Jervis service, use the Composer package in `packages/php`. The target public API is one Blade component plus one middleware declaration:
+
+```blade
+<x-jervis-captcha action="signup" />
+```
+
+```php
+Route::post('/signup', SignupController::class)->middleware('jervis.captcha:signup');
+```
+
+The package registers and owns the same-application challenge routes and derives binding from the Laravel session. The browser widget can also be consumed from `@jervis/captcha`; it automatically creates a package-managed session when the `action` property is present. See [Embedded PHP / Laravel](./php-embedded.md).

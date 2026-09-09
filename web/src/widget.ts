@@ -1,7 +1,7 @@
 import { LitElement, html, nothing } from 'lit';
 import type { PropertyValues } from 'lit';
 import { CaptchaClient, CaptchaError } from './client';
-import type { Answer, Challenge, Point, Proof, Work } from './client';
+import type { Answer, Challenge, Point, Proof, SessionVariant, Work } from './client';
 import { messages } from './i18n';
 import type { MessageKey } from './i18n';
 import { styles } from './styles';
@@ -13,23 +13,31 @@ export class JervisCaptcha extends LitElement {
   static formAssociated = true;
   static styles = styles;
   static properties = {
-    endpoint: { type: String }, sessionToken: { attribute: false },
+    endpoint: { type: String }, action: { type: String }, csrfToken: { type: String, attribute: 'csrf-token' }, sessionToken: { attribute: false },
     presentation: { type: String }, locale: { type: String }, theme: { type: String, reflect: true },
     disabled: { type: Boolean, reflect: true }, name: { type: String, reflect: true },
     status: { state: true }, challenge: { state: true }, errorCode: { state: true },
     answerText: { state: true }, x: { state: true }, y: { state: true }, angle: { state: true },
     points: { state: true }, cursor: { state: true }, working: { state: true },
   };
-  endpoint = '/'; sessionToken = ''; presentation: 'inline' | 'checkbox' | 'invisible' = 'inline';
+  endpoint = ''; action = ''; csrfToken = ''; sessionToken = ''; presentation: 'inline' | 'checkbox' | 'invisible' = 'inline';
   locale: 'en' | 'ar' = 'en'; theme: 'light' | 'dark' | 'auto' = 'auto'; disabled = false; name = 'jervisCaptchaToken';
   private status: Status = 'idle'; private challenge?: Challenge; private errorCode = '';
   private answerText = ''; private x = 0; private y = 0; private angle = 0;
   private points: Point[] = []; private cursor?: Point; private working = false;
-  private proof = ''; private lastType = ''; private operation = 0; private readyAt = 0;
+  private proof = ''; private lastType = ''; private operation = 0; private readyAt = 0; private managedSessionToken = '';
+  private managedVariant: SessionVariant = 'standard'; private accessibilityAvailable = false;
   private expiry?: ReturnType<typeof setTimeout>; private controller?: AbortController;
   private worker?: Worker; private workNonce?: string; private internals?: ElementInternals;
   constructor() { super(); if (typeof this.attachInternals === 'function') this.internals = this.attachInternals(); }
   get token(): string { return this.status === 'success' ? this.proof : ''; }
+  private get activeSessionToken(): string { return this.sessionToken || this.managedSessionToken; }
+  private get resolvedEndpoint(): string { return this.endpoint || (this.action && !this.sessionToken ? '/jervis-captcha/' : '/'); }
+  private get canUseAccessibleChallenge(): boolean {
+    return !!this.action && !this.sessionToken && this.managedVariant === 'standard'
+      && this.accessibilityAvailable && this.status === 'ready' && this.challenge?.type !== 'audio';
+  }
+  private client(): CaptchaClient { return new CaptchaClient(this.resolvedEndpoint, globalThis.fetch, this.csrfToken); }
   private get t() { return messages[this.locale === 'ar' ? 'ar' : 'en']; }
   private event(name: string, detail?: unknown) { this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true })); }
   private invalidate() {
@@ -39,16 +47,33 @@ export class JervisCaptcha extends LitElement {
     this.internals?.setValidity({ customError: true }, this.t.required);
     this.event('jervis-reset');
   }
-  reset() { this.invalidate(); this.challenge = undefined; this.status = 'idle'; this.errorCode = ''; }
+  reset() {
+    this.invalidate(); this.managedSessionToken = ''; this.managedVariant = 'standard'; this.accessibilityAvailable = false;
+    this.challenge = undefined; this.status = 'idle'; this.errorCode = '';
+  }
+  async renew(): Promise<void> {
+    const variant = this.managedVariant;
+    this.reset(); this.managedVariant = variant;
+    if (this.presentation !== 'checkbox' && !this.disabled) await this.start();
+  }
+  private async recover(): Promise<void> {
+    if (this.action && !this.sessionToken) { await this.renew(); return; }
+    this.reset(); this.event('jervis-renew');
+  }
+  private async useAccessibleChallenge(): Promise<void> {
+    if (!this.canUseAccessibleChallenge || this.disabled) return;
+    this.reset(); this.managedVariant = 'accessible';
+    await this.start();
+  }
   formResetCallback() { this.reset(); this.event('jervis-renew'); }
   formDisabledCallback(disabled: boolean) { this.disabled = disabled; }
   formStateRestoreCallback() { this.reset(); this.event('jervis-renew'); }
   override disconnectedCallback() { this.reset(); super.disconnectedCallback(); }
-  override connectedCallback() { super.connectedCallback(); if (this.hasUpdated && this.sessionToken && this.presentation !== 'checkbox') void this.start(); }
+  override connectedCallback() { super.connectedCallback(); if (this.hasUpdated && (this.activeSessionToken || this.action) && this.presentation !== 'checkbox') void this.start(); }
   protected override updated(changed: PropertyValues<this>) {
-    if (changed.has('sessionToken') || changed.has('endpoint')) {
+    if (changed.has('sessionToken') || changed.has('endpoint') || changed.has('action') || changed.has('csrfToken')) {
       this.reset();
-      if (this.sessionToken && this.presentation !== 'checkbox' && !this.disabled) void this.start();
+      if ((this.activeSessionToken || this.action) && this.presentation !== 'checkbox' && !this.disabled) void this.start();
     }
     if (changed.has('disabled') && this.disabled) this.reset();
   }
@@ -56,17 +81,26 @@ export class JervisCaptcha extends LitElement {
     clearTimeout(this.expiry);
     this.expiry = setTimeout(() => {
       if (operation !== this.operation) return;
-      this.invalidate(); this.status = 'expired'; this.event('jervis-expired');
+      const finished = this.status === 'success'; this.invalidate(); if (finished) this.managedSessionToken = ''; this.status = 'expired'; this.event('jervis-expired');
     }, Math.max(0, milliseconds));
   }
   async start(): Promise<void> {
-    if (!this.sessionToken || this.disabled || !this.isConnected) return;
+    if ((!this.activeSessionToken && !this.action) || this.disabled || !this.isConnected) return;
     this.invalidate(); const op = this.operation; this.controller = new AbortController();
     this.challenge = undefined; this.status = 'loading'; this.errorCode = '';
     this.answerText = ''; this.x = 0; this.y = 0; this.angle = 0; this.points = []; this.cursor = undefined;
     const begin = performance.now();
     try {
-      const c = await new CaptchaClient(this.endpoint).issue(this.sessionToken, this.controller.signal);
+      let token = this.activeSessionToken;
+      if (!token) {
+        const session = await this.client().createSession(this.action, this.managedVariant, this.controller.signal);
+        if (op !== this.operation) return;
+        this.managedSessionToken = session.sessionToken;
+        this.accessibilityAvailable = session.accessibilityAvailable;
+        this.name = session.fieldName;
+        token = session.sessionToken;
+      }
+      const c = await this.client().issue(token, this.controller.signal);
       if (op !== this.operation) return;
       this.challenge = c; this.lastType = c.type; this.y = c.pieceTop ?? 0; this.status = 'ready';
       this.readyAt = performance.now() + c.minimumDelayMs;
@@ -113,6 +147,7 @@ export class JervisCaptcha extends LitElement {
     if (type === 'drag') return { x: this.x, y: this.y };
     if (type === 'rotate') return { angle: this.angle };
     if (type === 'click') return { points: this.points };
+    if (type === 'pow') return {};
     return { text: this.answerText };
   }
   async verify(): Promise<void> {
@@ -123,8 +158,10 @@ export class JervisCaptcha extends LitElement {
       const remaining = this.readyAt - performance.now();
       if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
       if (op !== this.operation) return;
+      const token = this.activeSessionToken;
+      if (!token) { this.showError(new CaptchaError('invalid_session')); return; }
       const begin = performance.now();
-      const proof: Proof = await new CaptchaClient(this.endpoint).solve(this.sessionToken, c.id, this.answer(), this.workNonce, this.controller?.signal);
+      const proof: Proof = await this.client().solve(token, c.id, this.answer(), this.workNonce, this.controller?.signal);
       if (op !== this.operation) return;
       const ttl = proof.expiresInMs - (performance.now() - begin);
       if (ttl <= 0) { this.invalidate(); this.status = 'expired'; this.event('jervis-expired'); return; }
@@ -186,8 +223,10 @@ export class JervisCaptcha extends LitElement {
     return html`<section part="container" class=${hidden ? 'card hidden' : 'card'} dir=${this.locale === 'ar' ? 'rtl' : 'ltr'} aria-busy=${this.status === 'loading' || this.status === 'verifying'}>
       <header><span class="mark" aria-hidden="true">J</span><div><h2>${this.t.title}</h2><small>${this.t.subtitle}</small></div></header>
       ${this.status === 'success' ? html`<div class="success" role="status">✓ ${this.t.success}</div>` : this.challengeView()}
-      ${this.status === 'idle' && this.sessionToken ? html`<button class="primary" type="button" role=${this.presentation === 'checkbox' ? 'checkbox' : 'button'} aria-checked=${this.presentation === 'checkbox' ? 'false' : nothing} @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.start}</button>` : nothing}
+      ${this.status === 'idle' && (this.activeSessionToken || this.action) ? html`<button class="primary" type="button" role=${this.presentation === 'checkbox' ? 'checkbox' : 'button'} aria-checked=${this.presentation === 'checkbox' ? 'false' : nothing} @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.start}</button>` : nothing}
+      ${['expired', 'error'].includes(this.status) && (this.action || this.sessionToken) ? html`<button class="primary" type="button" @click=${() => this.recover()} ?disabled=${this.disabled}>${this.t.retry}</button>` : nothing}
       ${this.challenge && this.status === 'ready' ? html`<div class="actions"><button class="primary" part="verify-button" type="button" @click=${() => this.verify()} ?disabled=${this.disabled || this.working || this.challenge.type === 'pow'}>${this.t.verify}</button><button class="refresh" type="button" @click=${() => this.start()} ?disabled=${this.disabled}>${this.t.refresh}</button></div>` : nothing}
+      ${this.canUseAccessibleChallenge ? html`<button class="refresh accessible" type="button" @click=${() => this.useAccessibleChallenge()} ?disabled=${this.disabled}>${this.t.accessible}</button>` : nothing}
       <div class=${errorMessage ? 'status error' : 'status'} role="status" aria-live="polite">${this.working ? html`<span class="spinner"></span>${this.t.work}` : errorMessage || (this.status === 'success' ? '' : this.t[this.status as MessageKey] ?? '')}</div>
       <footer><span>Jervis Captcha</span><span>${this.t.local}</span></footer>
     </section>`;

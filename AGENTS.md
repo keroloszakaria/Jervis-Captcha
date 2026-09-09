@@ -9,5 +9,5 @@
 - The E2E answer oracle exists only in tests/fixture. NEVER add it, fixed answers, test keys or a bypass flag to cmd/jervis-captcha or internal/httpapi.
 - Do not claim AI-proof, universal human detection, WCAG compliance, biometric support or compatibility testing that has not been demonstrated.
 - Default UI must remain Arabic/English, keyboard-operable, touch-capable and compatible with reduced motion.
-- Validate with npm run validate:web, go test -race ./..., go vet ./..., npm run test:e2e, dotnet build sdk/dotnet and PHP/Python checks. SQLite must be tested, not replaced by an in-memory mock for release acceptance.
+- Validate with npm run validate:web, go test -mod=readonly -race ./..., go vet -mod=readonly ./..., npm run test:e2e, dotnet build sdk/dotnet and PHP/Python checks. The repository root may also contain Composer's PHP `vendor/`; Go commands must not interpret that directory as Go vendoring. SQLite must be tested, not replaced by an in-memory mock for release acceptance.
 - Never commit jervis.json, customer data, live secrets or node_modules. Do not publish packages or deploy customer services without explicit authorization.

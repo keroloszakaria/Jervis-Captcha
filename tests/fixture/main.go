@@ -35,7 +35,10 @@ func main() {
 	p.MinSolveMS = 50
 	p.ProofTTLSeconds = 5
 	p.SessionsPerMinute = 10000
-	e, err := captcha.New(store, []captcha.Site{{Key: "fixture", Secret: "fixture-secret-not-for-production-000000", Origins: []string{"http://127.0.0.1:8099"}, Actions: map[string]captcha.Policy{"demo": p}}})
+	e, err := captcha.New(store, []captcha.Site{{
+		Key: "fixture", Secret: "fixture-secret-not-for-production-000000", Origins: []string{"http://127.0.0.1:8099"},
+		Actions: map[string]captcha.Policy{"demo": p, "accessible-demo": p},
+	}})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +47,52 @@ func main() {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", httpapi.New(e, assets, true).Handler())
+	api := httpapi.New(e, assets, true).Handler()
+	// Test-only embedded-style route: it proves that the browser package can
+	// bootstrap a session without application-owned glue code. Production
+	// Laravel implements this route inside the Composer package.
+	mux.HandleFunc("POST /jervis-captcha/session/{action}", func(w http.ResponseWriter, r *http.Request) {
+		action := r.PathValue("action")
+		var req struct {
+			Variant string `json:"variant"`
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid", http.StatusBadRequest)
+			return
+		}
+		if req.Variant == "" {
+			req.Variant = "standard"
+		}
+		if req.Variant != "standard" && req.Variant != "accessible" {
+			http.Error(w, "invalid variant", http.StatusBadRequest)
+			return
+		}
+
+		kind := "pow"
+		if action == "accessible-demo" {
+			kind = "text"
+		}
+		if req.Variant == "accessible" {
+			kind = "audio"
+		}
+		result, err := e.CreateSession(r.Context(), captcha.SessionRequest{
+			SiteKey: "fixture", Action: action, Binding: "managed-browser-binding", Type: kind,
+		})
+		if err != nil {
+			http.Error(w, "session rejected", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"sessionToken": result.SessionToken,
+			"expiresInMs": result.ExpiresInMS,
+			"accessibilityAvailable": true,
+			"fieldName": "fixtureCaptchaProof",
+		})
+	})
+	mux.Handle("/jervis-captcha/", http.StripPrefix("/jervis-captcha", api))
+	mux.Handle("/", api)
 	mux.HandleFunc("POST /__test/answer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer fixture-oracle-only" {
 			http.Error(w, "denied", 401)
