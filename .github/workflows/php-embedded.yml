@@ -157,6 +157,7 @@ jobs:
           composer validate --strict
           (cd packages/php && composer validate --strict)
           find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel tests/performance tests/adversarial -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/adversarial/SelfTest.php
       - name: Pin Laravel generation under package test
         env:
           LARAVEL_CONSTRAINT: ${{ matrix.laravel }}

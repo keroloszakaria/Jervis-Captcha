@@ -12,6 +12,7 @@ if (!is_dir($outDir) && !mkdir($outDir, 0777, true) && !is_dir($outDir)) {
 }
 
 $generator = new ChallengeGenerator();
+$corpusId = bin2hex(random_bytes(16));
 $records = [];
 foreach (['standard' => false, 'antiAi' => true] as $profile => $antiAi) {
     for ($i = 0; $i < $count; $i++) {
@@ -26,17 +27,25 @@ foreach (['standard' => false, 'antiAi' => true] as $profile => $antiAi) {
     }
 }
 
-file_put_contents(
-    $outDir . '/manifest.json',
-    json_encode([
-        'generatedAtUtc' => gmdate(DATE_ATOM),
-        'samplesPerProfile' => $count,
-        'profiles' => ['standard', 'antiAi'],
-        'variants' => ['original', 'resize2x', 'jpeg65', 'grayscale'],
-        'records' => $records,
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+$generatedAtUtc = gmdate(DATE_ATOM);
+$metadata = [
+    'corpusId' => $corpusId,
+    'generatedAtUtc' => $generatedAtUtc,
+    'samplesPerProfile' => $count,
+    'profiles' => ['standard', 'antiAi'],
+    'variants' => ['original', 'resize2x', 'jpeg65', 'grayscale'],
+];
+writeJson($outDir . '/manifest.json', $metadata + ['records' => $records]);
+$solverRecords = array_map(
+    static fn (array $record): array => [
+        'profile' => $record['profile'],
+        'variant' => $record['variant'],
+        'path' => $record['path'],
+    ],
+    $records,
 );
-fwrite(STDOUT, sprintf("generated %d images across %d records in %s\n", $count * 2, count($records), $outDir));
+writeJson($outDir . '/solver-manifest.json', $metadata + ['records' => $solverRecords]);
+fwrite(STDOUT, sprintf("generated %d images across %d records in %s (corpus %s)\n", $count * 2, count($records), $outDir, $corpusId));
 
 function decodeDataUrl(string $value): string
 {
@@ -83,4 +92,15 @@ function writePng(GdImage $image, string $outDir, string $name): string
     $path = $outDir . '/' . $name;
     if (!imagepng($image, $path, 7)) throw new RuntimeException("Unable to write {$name}");
     return $path;
+}
+
+function writeJson(string $path, array $value): void
+{
+    $json = json_encode(
+        $value,
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+    );
+    if (file_put_contents($path, $json, LOCK_EX) === false) {
+        throw new RuntimeException("Unable to write corpus manifest: {$path}");
+    }
 }

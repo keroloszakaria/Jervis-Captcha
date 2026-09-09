@@ -72,7 +72,8 @@ jobs:
       - name: PHP package syntax and existing SDK validation
         run: |
           php scripts/check-composer-manifests.php
-          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel -name '*.php' -print0 | xargs -0 -n1 php -l
+          find packages/php/src packages/php/tests packages/php/config tests/consumers/laravel tests/adversarial -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/adversarial/SelfTest.php
           php -l sdk/php/JervisCaptcha.php
           python3 -m py_compile sdk/python/jervis_captcha.py scripts/smoke-native.py
       - name: Build .NET SDK

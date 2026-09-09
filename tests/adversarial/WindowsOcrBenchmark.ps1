@@ -4,8 +4,9 @@ param(
     [string]$Language = 'en-US'
 )
 $ErrorActionPreference = 'Stop'
-$manifestPath = Join-Path $Corpus 'manifest.json'
-if (-not (Test-Path $manifestPath)) { throw "Missing corpus manifest: $manifestPath" }
+$solverManifestPath = Join-Path $Corpus 'solver-manifest.json'
+$manifestPath = if (Test-Path $solverManifestPath) { $solverManifestPath } else { Join-Path $Corpus 'manifest.json' }
+if (-not (Test-Path $manifestPath)) { throw "Missing corpus solver manifest: $manifestPath" }
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
@@ -64,6 +65,7 @@ if ($outputDir -and -not (Test-Path $outputDir)) { New-Item -ItemType Directory 
 $json = [pscustomobject]@{
     solver = 'windows-media-ocr'
     language = $Language
+    corpusId = [string] $manifest.corpusId
     generatedAtUtc = [DateTime]::UtcNow.ToString('o')
     predictions = $predictions
 } | ConvertTo-Json -Depth 5
